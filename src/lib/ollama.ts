@@ -106,6 +106,25 @@ export class OllamaClient {
     }
     return out;
   }
+
+  /**
+   * Non-streaming /api/chat returning the raw parsed JSON response. Used by the
+   * reasoning engine for native tool-calling (the `tools` field carries tool
+   * definitions; the response's `message.tool_calls` carries requested calls).
+   */
+  async chatRaw(body: Record<string, unknown>): Promise<unknown> {
+    const res = await this.fetchImpl(`${this.host}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, stream: false }),
+    });
+    if (!res.ok) {
+      throw new OllamaError(
+        `Ollama request failed: ${String(res.status)} ${res.statusText}`,
+      );
+    }
+    return res.json();
+  }
 }
 
 /**

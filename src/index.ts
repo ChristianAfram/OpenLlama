@@ -8,6 +8,7 @@
  */
 
 import { Command } from "commander";
+import { registerAgentCommand } from "./commands/agent.js";
 import { registerAuditCommand } from "./commands/audit.js";
 import { registerChatCommand } from "./commands/chat.js";
 
@@ -21,6 +22,7 @@ program
   )
   .version("0.1.0-pre.0");
 
+registerAgentCommand(program);
 registerAuditCommand(program);
 registerChatCommand(program);
 
