@@ -58,23 +58,68 @@ export interface Tool<TArgs = unknown> {
   execute(args: TArgs, ctx: ToolContext): Promise<ToolResult> | ToolResult;
 }
 
+// ─── Mutating tools ─────────────────────────────────────────────────────────────
+
+/**
+ * A planned mutation: everything needed to audit a mutation, computed WITHOUT
+ * performing any side effect. The executor records this to the ledger first and
+ * only then calls `apply()`.
+ */
+export interface PlannedMutation {
+  /** The resource being changed (repo-relative path or similar). */
+  target: string;
+  /** Per-path before/after blob hashes (before = null for a newly created file). */
+  data_changed: { path: string; before_hash: string | null; after_hash: string }[];
+  /** How to undo this mutation. */
+  rollback_path: string;
+  /** Human-facing summary fed back to the model on success. */
+  summary: string;
+  /** The actual side effect. Called by the executor ONLY after the audit write is confirmed. */
+  apply: () => void | Promise<void>;
+}
+
+/**
+ * A mutating tool computes a PlannedMutation but never touches the world itself —
+ * the executor performs the side effect, after the audit write succeeds. This is
+ * the structural enforcement of the no-audit-no-action invariant.
+ */
+export interface MutatingTool<TArgs = unknown> {
+  descriptor: ToolDescriptor;
+  schema: ZodType<TArgs>;
+  plan(args: TArgs, ctx: ToolContext): PlannedMutation | Promise<PlannedMutation>;
+}
+
+export type AnyTool = Tool | MutatingTool;
+
+export function isMutatingTool(tool: AnyTool): tool is MutatingTool {
+  return "plan" in tool;
+}
+
+/**
+ * The narrow audit interface the executor depends on. AuditLedger satisfies it;
+ * tests can substitute a sink whose appendEvent throws to prove the invariant.
+ */
+export interface AuditSink {
+  appendEvent(input: AppendInput): { event_id: string; seq: number; hash: string };
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 export class ToolRegistry {
-  private readonly tools = new Map<string, Tool>();
+  private readonly tools = new Map<string, AnyTool>();
 
-  register(tool: Tool): void {
+  register(tool: AnyTool): void {
     if (this.tools.has(tool.descriptor.name)) {
       throw new Error(`tool already registered: ${tool.descriptor.name}`);
     }
     this.tools.set(tool.descriptor.name, tool);
   }
 
-  get(name: string): Tool | undefined {
+  get(name: string): AnyTool | undefined {
     return this.tools.get(name);
   }
 
-  list(): Tool[] {
+  list(): AnyTool[] {
     return [...this.tools.values()];
   }
 }
@@ -114,6 +159,15 @@ export async function dispatchTool(
     // Unknown tool: nothing to attribute an audit event to a descriptor, but
     // we still record the attempt so the timeline is complete.
     return { status: "unknown_tool", error: `unknown tool: ${name}` };
+  }
+  if (isMutatingTool(tool)) {
+    // Mutating tools must go through the executor (no-audit-no-action gating),
+    // never the read/draft dispatcher. The engine routes these; this is a guard.
+    return {
+      status: "error",
+      error: `tool "${name}" is a mutating tool and must run through the executor`,
+      event_id: "",
+    };
   }
 
   const ledger = opts.ledger ?? getDefaultLedger();
