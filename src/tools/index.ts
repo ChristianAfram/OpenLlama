@@ -12,6 +12,9 @@ import { listDirTool } from "./list_dir.js";
 import { grepTool } from "./grep.js";
 import { proposeDiffTool } from "./propose_diff.js";
 import { writeFileTool } from "./write_file.js";
+import { editFileTool } from "./edit_file.js";
+import { runShellTool } from "./run_shell.js";
+import { gitTool } from "./git.js";
 
 export function buildDefaultRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -20,6 +23,9 @@ export function buildDefaultRegistry(): ToolRegistry {
   registry.register(grepTool);
   registry.register(proposeDiffTool);
   registry.register(writeFileTool);
+  registry.register(editFileTool);
+  registry.register(runShellTool);
+  registry.register(gitTool);
   return registry;
 }
 

@@ -74,8 +74,13 @@ export interface PlannedMutation {
   rollback_path: string;
   /** Human-facing summary fed back to the model on success. */
   summary: string;
-  /** The actual side effect. Called by the executor ONLY after the audit write is confirmed. */
-  apply: () => void | Promise<void>;
+  /**
+   * The actual side effect. Called by the executor ONLY after the audit write is
+   * confirmed. If it returns a string, that string replaces `summary` in the
+   * outcome — used by tools (run_shell, git) whose useful result is only known
+   * after the side effect runs.
+   */
+  apply: () => void | string | Promise<void | string>;
 }
 
 /**
