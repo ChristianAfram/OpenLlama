@@ -1,0 +1,23 @@
+# Exception lifecycle (framework §25, Master Plan §10).
+#
+# Accepted risk must expire. No permanent exceptions; every entry needs an
+# owner, an expiry, and a compensating control. An entry past `expires_at`
+# becomes a hard blocker (the policy CI job — Prompt 8 — will fail the build).
+
+- exception_id: EX-2026-001
+  risk: "Independent verifier agent not yet implemented for L4/L5 actions"
+  impact: >-
+    Approved high/critical actions rely on the human approval + L5 confirmation
+    phrase alone; there is no second automated reviewer yet.
+  reason: >-
+    The verifier lands in v0.5 (Prompt 9). Until then, manual approval and the
+    action-specific L5 confirmation phrase are the compensating control.
+  owner: chris
+  approved_by: chris
+  created_at: 2026-06-04
+  expires_at: 2026-09-01
+  compensating_control: >-
+    Scoped, expiring approval grants enforced by the kernel (verifyGrant); L5
+    requires a manual, action-specific confirmation phrase; the agent loop is
+    given no approval channel, so it can never approve its own action.
+  status: active

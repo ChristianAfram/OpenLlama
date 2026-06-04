@@ -12,7 +12,10 @@
  *
  *   1. validates args (zod)            — invalid → logged "blocked", no effect
  *   2. plans the mutation              — refusal (e.g. overwrite) → "blocked"
+ *   2b. enforces descriptor denylist   — denied path → "blocked"
  *   3. classifies it (deterministic classifier, Prompt 4)
+ *   3b. approval gate (Prompt 5)       — L4/L5 need a scoped grant (+ L5 phrase);
+ *                                         no/denied/invalid grant → "blocked"
  *   4. APPENDS THE AUDIT EVENT         — if this throws, we stop here, no effect
  *   5. applies the side effect         — only now does the world change
  *   6. (on apply failure) logs "failed"
@@ -21,12 +24,18 @@
  * outage can never produce an unlogged mutation.
  */
 
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { AppendInput } from "./audit.js";
 import { getDefaultLedger } from "./audit.js";
 import type { AuditSink, MutatingTool, ToolContext } from "../tools/registry.js";
 import { classify, levelToRisk } from "./classifier.js";
 import { globMatch } from "../lib/glob-match.js";
+import {
+  verifyGrant,
+  type ApprovalProvider,
+  type ApprovalRequest,
+} from "./approval.js";
 
 export class ExecutorError extends Error {
   override name = "ExecutorError";
@@ -45,6 +54,14 @@ export interface ExecuteOptions {
   correlation_id?: string;
   model?: string;
   prompt_version?: string;
+  /**
+   * Channel for obtaining approval for Level 4/5 actions. The engine supplies
+   * none (the agent cannot approve itself), so agent-driven L4/L5 stays blocked;
+   * a human-driven CLI supplies an interactive provider.
+   */
+  approvals?: ApprovalProvider;
+  /** Who is requesting the action (recorded in the approval request). */
+  requested_by?: string;
 }
 
 // (classifyStub removed — Prompt 4 wires in the real deterministic classifier)
@@ -66,6 +83,11 @@ export class Executor {
   ): Promise<ExecuteOutcome> {
     const ledger = this.ledger(opts);
 
+    // Every execution has a concrete session id: approval grants are bound to a
+    // session, so an absent one would make every grant un-matchable. Generate
+    // one when the caller doesn't supply it.
+    const sessionId = opts.session_id ?? randomUUID();
+
     // The base audit fields carry the descriptor defaults; they are upgraded
     // after classification when the classifier raises the level.
     const base: AppendInput = {
@@ -76,7 +98,7 @@ export class Executor {
       risk_level: tool.descriptor.risk_level,
       permission_level: tool.descriptor.permission_level,
       input_source: "user",
-      ...(opts.session_id ? { session_id: opts.session_id } : {}),
+      session_id: sessionId,
       ...(opts.correlation_id ? { correlation_id: opts.correlation_id } : {}),
       ...(opts.model ? { model: opts.model } : {}),
       ...(opts.prompt_version ? { prompt_version: opts.prompt_version } : {}),
@@ -137,13 +159,22 @@ export class Executor {
         : {}),
     };
 
-    // 3b. Block if the classified level requires approval / manual confirmation.
-    //     Levels 4+ require the approval flow (Prompt 5); until then they are
-    //     unconditionally blocked so no dangerous action auto-executes.
+    // 3b. The approval gate. Levels 4/5 may only proceed with a scoped, expiring
+    //     grant (L5 also requires a manual confirmation phrase). The grant comes
+    //     from an injected provider — never from the agent itself. Levels 0–3
+    //     skip this entirely.
+    let approvalFields: Partial<AppendInput> = {};
     if (classification.level >= 4) {
-      const reason = `action blocked: level ${String(classification.level)} (${classification.rule_id}) — ${classification.reason}`;
-      const event_id = this.tryLogBlocked(ledger, auditBase, reason);
-      return { status: "blocked", event_id, reason };
+      const gate = await this.runApprovalGate(
+        ledger,
+        auditBase,
+        opts,
+        tool,
+        planned,
+        classification.level,
+      );
+      if (gate.status === "blocked") return gate;
+      approvalFields = gate.fields;
     }
 
     // 4. Audit the (about-to-happen) mutation. THIS IS THE GATE.
@@ -155,6 +186,7 @@ export class Executor {
     try {
       ({ event_id } = ledger.appendEvent({
         ...auditBase,
+        ...approvalFields,
         target: planned.target,
         data_changed: planned.data_changed,
         rollback_path: planned.rollback_path,
@@ -182,6 +214,97 @@ export class Executor {
       event_id,
       summary: planned.summary,
       rollback_path: planned.rollback_path,
+    };
+  }
+
+  /**
+   * Run the L4/L5 approval gate. Returns either a `blocked` outcome (no grant,
+   * denied, or a grant that fails verification) or the audit fields to attach to
+   * the executed event (approval_id + policy_decision).
+   */
+  private async runApprovalGate(
+    ledger: AuditSink,
+    auditBase: AppendInput,
+    opts: ExecuteOptions,
+    tool: MutatingTool,
+    planned: { target?: string; data_changed: AppendInput["data_changed"]; rollback_path: string; summary: string },
+    level: number,
+  ): Promise<
+    | { status: "blocked"; event_id: string; reason: string }
+    | { status: "ok"; fields: Partial<AppendInput> }
+  > {
+    const requiresConfirmation = level >= 5;
+    const decisionField = requiresConfirmation ? "REQUIRE_CONFIRMATION" : "REQUIRE_APPROVAL";
+
+    const provider = opts.approvals;
+    if (!provider) {
+      // No approval channel (e.g. the agent loop) → block. The agent can never
+      // approve its own L4/L5 action.
+      const reason = `level ${String(level)} action requires ${
+        requiresConfirmation ? "manual confirmation" : "approval"
+      } but no approval channel is available`;
+      const event_id = this.tryLogBlocked(
+        ledger,
+        { ...auditBase, policy_decision: decisionField },
+        reason,
+      );
+      return { status: "blocked", event_id, reason };
+    }
+
+    const req: ApprovalRequest = {
+      action_id: randomUUID(),
+      tool_name: tool.descriptor.name,
+      permission_level: level as ApprovalRequest["permission_level"],
+      risk_level: levelToRisk(level as ApprovalRequest["permission_level"]),
+      ...(planned.target !== undefined ? { target: planned.target } : {}),
+      summary: planned.summary,
+      data_changed: (planned.data_changed ?? []) as ApprovalRequest["data_changed"],
+      rollback_path: planned.rollback_path,
+      reason: auditBase.policy_reason ?? "elevated risk",
+      ...(auditBase.session_id ? { session_id: auditBase.session_id } : {}),
+      requested_by: opts.requested_by ?? auditBase.actor ?? "agent:openllama",
+    };
+
+    let decision;
+    try {
+      decision = await provider.requestApproval(req);
+    } catch (err) {
+      const reason = `approval channel error: ${err instanceof Error ? err.message : String(err)}`;
+      const event_id = this.tryLogBlocked(
+        ledger,
+        { ...auditBase, policy_decision: decisionField },
+        reason,
+      );
+      return { status: "blocked", event_id, reason };
+    }
+
+    if (decision.status === "denied") {
+      const reason = `approval denied: ${decision.reason}`;
+      const event_id = this.tryLogBlocked(
+        ledger,
+        { ...auditBase, policy_decision: "DENY" },
+        reason,
+      );
+      return { status: "blocked", event_id, reason };
+    }
+
+    // A grant was returned — verify it covers this exact action.
+    const verdict = verifyGrant(decision.grant, req, new Date());
+    if (!verdict.ok) {
+      const reason = `approval grant rejected (${verdict.rejection ?? "invalid"})${
+        verdict.detail ? `: ${verdict.detail}` : ""
+      }`;
+      const event_id = this.tryLogBlocked(
+        ledger,
+        { ...auditBase, policy_decision: "DENY", approval_id: decision.grant.approval_id },
+        reason,
+      );
+      return { status: "blocked", event_id, reason };
+    }
+
+    return {
+      status: "ok",
+      fields: { policy_decision: decisionField, approval_id: decision.grant.approval_id },
     };
   }
 
