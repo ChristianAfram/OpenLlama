@@ -11,6 +11,7 @@ import { error, info } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
 import { dispatchTool, isMutatingTool } from "../tools/registry.js";
 import { Executor } from "../kernel/executor.js";
+import { CliApprovalProvider } from "../kernel/approval-cli.js";
 
 interface ExecOptions {
   json?: string;
@@ -45,7 +46,13 @@ export function registerExecCommand(program: Command): void {
 
       if (isMutatingTool(tool)) {
         const executor = new Executor();
-        const outcome = await executor.execute(tool, args, { ctx: { repoRoot } });
+        // A human at the terminal can approve L4/L5 actions interactively; the
+        // provider denies automatically when stdin is not a TTY.
+        const outcome = await executor.execute(tool, args, {
+          ctx: { repoRoot },
+          approvals: new CliApprovalProvider(),
+          requested_by: "user:cli",
+        });
         switch (outcome.status) {
           case "executed":
             info(`✓ executed (audit ${outcome.event_id})`);
