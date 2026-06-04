@@ -182,7 +182,7 @@ describe("Invariant 3: tampering is detected at the correct sequence number", ()
 // ─── Invariant 4: secrets never appear in stored rows ────────────────────────
 
 describe("Invariant 4: secrets are never stored in the clear", () => {
-  const SECRET = "sk-secret-api-key-abcdefghij12345678";
+  const SECRET = "sk-secret-api-key-abcdefghij12345678"; // gitleaks:allow
 
   it("a secret in the target field is redacted in the stored row", () => {
     ledger.appendEvent(makeEvent("tool_call", { target: SECRET }));
@@ -210,7 +210,7 @@ describe("Invariant 4: secrets are never stored in the clear", () => {
   });
 
   it("a PEM private key in error is redacted", () => {
-    const pem = "-----BEGIN RSA PRIVATE KEY-----\nABC123\n-----END RSA PRIVATE KEY-----";
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\nABC123\n-----END RSA PRIVATE KEY-----"; // gitleaks:allow
     ledger.appendEvent(makeEvent("tool_call", { error: pem }));
     const [ev] = ledger.getEvents(1);
     expect(ev!.error).not.toContain("BEGIN RSA PRIVATE KEY");
