@@ -200,8 +200,9 @@ export class Executor {
     }
 
     // 5. Apply the side effect — only now does the world change.
+    let applyResult: void | string;
     try {
-      await planned.apply();
+      applyResult = await planned.apply();
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       // 6. Best-effort compensating record of the post-audit failure.
@@ -212,7 +213,7 @@ export class Executor {
     return {
       status: "executed",
       event_id,
-      summary: planned.summary,
+      summary: typeof applyResult === "string" ? applyResult : planned.summary,
       rollback_path: planned.rollback_path,
     };
   }
