@@ -2,7 +2,7 @@
 
 **Local-first, governance-native, open-source AI coding agent.**
 
-> Status: **pre-alpha** (v0.2 — "It respects boundaries"). Not for production use.
+> Status: **pre-alpha** (v0.3 — "It can't be tricked by the repo"). Not for production use.
 
 ## The thesis
 
@@ -23,8 +23,8 @@ everything it did.
 
 ## What works today
 
-The governance kernel and the read/draft/low-risk tool surface are in place.
-Built and tested across milestones v0.1–v0.2:
+The governance kernel, the full Level 0–5 tool surface, and the deterministic
+AI eval suite are in place. Built and tested across milestones v0.1–v0.3:
 
 - **Hash-chained audit ledger** — every action is recorded in an append-only
   SQLite ledger; `hash = sha256(prev_hash + canonical_json(body))`. UPDATE/DELETE
@@ -49,9 +49,17 @@ Built and tested across milestones v0.1–v0.2:
   [Ollama](https://ollama.com) model, with a hard iteration cap and a
   self-repair budget for invalid tool calls. External content (file contents,
   tool output) is fenced as untrusted data, never treated as instructions.
-- **Tools** — `read_file`, `list_dir`, `grep` (L0), `propose_diff` (L1), and
-  `write_file` (L3, new files only). The higher-risk mutating tools
-  (`edit_file`, `git`, `run_shell`) arrive next.
+- **Tools** — `read_file`, `list_dir`, `grep` (L0), `propose_diff` (L1),
+  `write_file` (L3, new files only), and the higher-risk mutating tools
+  `edit_file` (L4), `run_shell` (L4), and `git` (commit L4, push L5,
+  force-push always refused) — each gated by the executor and approval gate.
+- **AI eval suite** — deterministic, model-independent evals prove the kernel's
+  guarantees are *structural*: a prompt injection in repo content cannot cause a
+  mutation or secret leak **even if the model is fully compromised and obeys
+  it**. Categories: prompt-injection, destructive-refusal, secret-handling,
+  tool-permissions, approval-boundary, json-tool-args. Prompt-injection and
+  destructive-refusal are hard **100%** release gates, enforced in CI. See
+  [`evals/README.md`](evals/README.md).
 
 ### Commands
 
@@ -59,6 +67,7 @@ Built and tested across milestones v0.1–v0.2:
 openllama chat  "<prompt>"            # read-only conversation with a local model
 openllama agent "<task>"              # the audited agent loop (read + draft + L3 write)
 openllama exec  <tool> --json '<args>'  # run one tool through the kernel (no model)
+openllama eval                        # run the AI eval suite + enforce the gates
 openllama audit show                  # human-readable event timeline
 openllama audit verify                # check the hash chain is intact
 openllama audit export [--siem]       # JSONL export for a SIEM

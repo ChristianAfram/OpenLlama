@@ -144,8 +144,14 @@ export class Executor {
       descriptor_requires_approval: tool.descriptor.requires_approval,
       target: planned.target,
       content: typeof parsedArgs["content"] === "string" ? parsedArgs["content"] : undefined,
+      // git tools name the branch "branch"; accept either spelling so a push to
+      // a protected branch (main, release/*, …) escalates to L5 via the classifier.
       git_branch:
-        typeof parsedArgs["git_branch"] === "string" ? parsedArgs["git_branch"] : undefined,
+        typeof parsedArgs["git_branch"] === "string"
+          ? parsedArgs["git_branch"]
+          : typeof parsedArgs["branch"] === "string"
+            ? (parsedArgs["branch"] as string)
+            : undefined,
       command: typeof parsedArgs["command"] === "string" ? parsedArgs["command"] : undefined,
     });
 
