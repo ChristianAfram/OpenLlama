@@ -1,0 +1,12 @@
+title = "OpenLlama gitleaks configuration"
+
+# Global allowlist for known-fake test fixture values.
+# Each entry here is an intentional, non-real secret used in unit tests to
+# verify that the redaction engine correctly detects and strips secret-shaped
+# strings. These values were never real credentials.
+[allowlist]
+description = "Intentional fake secrets used as redaction test fixtures"
+regexes = [
+  # tests/audit.test.ts: input to the sk-key redaction invariant test
+  '''sk-secret-api-key-abcdefghij12345678''',
+]
