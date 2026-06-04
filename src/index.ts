@@ -8,6 +8,7 @@
  */
 
 import { Command } from "commander";
+import { registerAuditCommand } from "./commands/audit.js";
 import { registerChatCommand } from "./commands/chat.js";
 
 const program = new Command();
@@ -20,6 +21,7 @@ program
   )
   .version("0.1.0-pre.0");
 
+registerAuditCommand(program);
 registerChatCommand(program);
 
 program.parseAsync(process.argv).catch((err: unknown) => {
