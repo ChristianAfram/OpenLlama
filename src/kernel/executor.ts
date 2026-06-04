@@ -12,7 +12,7 @@
  *
  *   1. validates args (zod)            — invalid → logged "blocked", no effect
  *   2. plans the mutation              — refusal (e.g. overwrite) → "blocked"
- *   3. classifies it (stub; P4 full)
+ *   3. classifies it (deterministic classifier, Prompt 4)
  *   4. APPENDS THE AUDIT EVENT         — if this throws, we stop here, no effect
  *   5. applies the side effect         — only now does the world change
  *   6. (on apply failure) logs "failed"
@@ -22,9 +22,11 @@
  */
 
 import { z } from "zod";
-import type { AppendInput, RiskLevel, PermissionLevel } from "./audit.js";
+import type { AppendInput } from "./audit.js";
 import { getDefaultLedger } from "./audit.js";
 import type { AuditSink, MutatingTool, ToolContext } from "../tools/registry.js";
+import { classify, levelToRisk } from "./classifier.js";
+import { globMatch } from "../lib/glob-match.js";
 
 export class ExecutorError extends Error {
   override name = "ExecutorError";
@@ -45,10 +47,7 @@ export interface ExecuteOptions {
   prompt_version?: string;
 }
 
-/** Minimal stub classifier — replaced by the deterministic classifier in Prompt 4. */
-function classifyStub(tool: MutatingTool): { risk: RiskLevel; level: PermissionLevel } {
-  return { risk: tool.descriptor.risk_level, level: tool.descriptor.permission_level };
-}
+// (classifyStub removed — Prompt 4 wires in the real deterministic classifier)
 
 export class Executor {
   constructor(private readonly defaultLedger?: AuditSink) {}
@@ -66,15 +65,16 @@ export class Executor {
     opts: ExecuteOptions,
   ): Promise<ExecuteOutcome> {
     const ledger = this.ledger(opts);
-    const { risk, level } = classifyStub(tool);
 
+    // The base audit fields carry the descriptor defaults; they are upgraded
+    // after classification when the classifier raises the level.
     const base: AppendInput = {
       actor: "agent:openllama",
       service: "tool-executor",
       action: tool.descriptor.name,
       tool_name: tool.descriptor.name,
-      risk_level: risk,
-      permission_level: level,
+      risk_level: tool.descriptor.risk_level,
+      permission_level: tool.descriptor.permission_level,
       input_source: "user",
       ...(opts.session_id ? { session_id: opts.session_id } : {}),
       ...(opts.correlation_id ? { correlation_id: opts.correlation_id } : {}),
@@ -100,7 +100,53 @@ export class Executor {
       return { status: "blocked", event_id, reason };
     }
 
-    // 3 + 4. Audit the (about-to-happen) mutation. THIS IS THE GATE.
+    // 2b. Enforce descriptor-level path denylist (independent of the tool's own
+    //     path checks — defense in depth). If the planned target matches any
+    //     denied_paths glob, block here before classification.
+    if (planned.target !== undefined) {
+      const deniedPattern = tool.descriptor.denied_paths.find((pat) =>
+        globMatch(pat, planned.target!),
+      );
+      if (deniedPattern !== undefined) {
+        const reason = `target "${planned.target}" matches tool's denied path: ${deniedPattern}`;
+        const event_id = this.tryLogBlocked(ledger, base, reason);
+        return { status: "blocked", event_id, reason };
+      }
+    }
+
+    // 3. Classify the action deterministically.
+    //    The classifier may raise the level; it never lowers it.
+    const parsedArgs = parsed.data as Record<string, unknown>;
+    const classification = classify({
+      descriptor_level: tool.descriptor.permission_level,
+      descriptor_requires_approval: tool.descriptor.requires_approval,
+      target: planned.target,
+      content: typeof parsedArgs["content"] === "string" ? parsedArgs["content"] : undefined,
+      git_branch:
+        typeof parsedArgs["git_branch"] === "string" ? parsedArgs["git_branch"] : undefined,
+      command: typeof parsedArgs["command"] === "string" ? parsedArgs["command"] : undefined,
+    });
+
+    // Rebuild audit base with the classified (possibly raised) level/risk.
+    const auditBase: AppendInput = {
+      ...base,
+      permission_level: classification.level,
+      risk_level: levelToRisk(classification.level),
+      ...(classification.rule_id !== "DESCRIPTOR_DEFAULT"
+        ? { policy_reason: classification.reason }
+        : {}),
+    };
+
+    // 3b. Block if the classified level requires approval / manual confirmation.
+    //     Levels 4+ require the approval flow (Prompt 5); until then they are
+    //     unconditionally blocked so no dangerous action auto-executes.
+    if (classification.level >= 4) {
+      const reason = `action blocked: level ${String(classification.level)} (${classification.rule_id}) — ${classification.reason}`;
+      const event_id = this.tryLogBlocked(ledger, auditBase, reason);
+      return { status: "blocked", event_id, reason };
+    }
+
+    // 4. Audit the (about-to-happen) mutation. THIS IS THE GATE.
     //
     // The event is recorded as "executed" because, once it is durably written,
     // the executor is committed to applying it. If appendEvent throws (the audit
@@ -108,7 +154,7 @@ export class Executor {
     let event_id: string;
     try {
       ({ event_id } = ledger.appendEvent({
-        ...base,
+        ...auditBase,
         target: planned.target,
         data_changed: planned.data_changed,
         rollback_path: planned.rollback_path,
@@ -127,7 +173,7 @@ export class Executor {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       // 6. Best-effort compensating record of the post-audit failure.
-      this.tryLogFailed(ledger, base, planned.target, reason);
+      this.tryLogFailed(ledger, auditBase, planned.target, reason);
       return { status: "apply_failed", event_id, reason };
     }
 
