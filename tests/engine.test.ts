@@ -117,6 +117,29 @@ describe("reasoning engine: read + propose, no mutation", () => {
   });
 });
 
+describe("engine routes mutating tools through the executor", () => {
+  it("the agent creates a new file end-to-end and it is audited as executed", async () => {
+    const engine = makeEngine([
+      {
+        content: "",
+        tool_calls: [{ name: "write_file", arguments: { path: "created.txt", content: "by agent\n" } }],
+      },
+      finalAnswer("Created the file."),
+    ]);
+
+    const result = await engine.run("create created.txt");
+    expect(result.stopReason).toBe("final_answer");
+
+    // The file exists on disk: the executor applied it after the audit write.
+    expect(readFileSync(join(repo, "created.txt"), "utf8")).toBe("by agent\n");
+
+    const ev = ledger.getEvents().find((e) => e.tool_name === "write_file");
+    expect(ev).toBeDefined();
+    expect(ev!.result).toBe("executed");
+    expect(ev!.permission_level).toBe(3);
+  });
+});
+
 describe("zod validation: invalid args never execute", () => {
   it("rejects an invalid read_file call and logs it as blocked, not executed", async () => {
     const engine = makeEngine([
