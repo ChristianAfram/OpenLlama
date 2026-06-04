@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Audit ledger / local databases (arrives Prompt 1)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+coverage/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,42 @@
+{
+  "name": "openllama",
+  "version": "0.1.0-pre.0",
+  "description": "Local-first, governance-native, open-source AI coding agent. No tool that mutates the world runs unless an audit write succeeds first.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "openllama": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "commander": "^15.0.0",
+    "ink": "^7.0.5",
+    "react": "^19.2.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.16",
+    "eslint": "^10.4.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "vitest": "^4.1.8"
+  }
+}
