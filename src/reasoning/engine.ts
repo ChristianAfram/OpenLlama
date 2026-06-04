@@ -16,8 +16,11 @@
 
 import { randomUUID } from "node:crypto";
 import type { AuditLedger } from "../kernel/audit.js";
+import { Executor } from "../kernel/executor.js";
 import {
   dispatchTool,
+  isMutatingTool,
+  type MutatingTool,
   type ToolContext,
   type ToolRegistry,
 } from "../tools/registry.js";
@@ -50,6 +53,7 @@ export class ReasoningEngine {
   private readonly maxIterations: number;
   private readonly repairAttempts: number;
   private readonly toolDefs: ToolDefinition[];
+  private readonly executor: Executor;
   private readonly sessionId = randomUUID();
 
   constructor(opts: EngineOptions) {
@@ -59,6 +63,7 @@ export class ReasoningEngine {
     this.ledger = opts.ledger;
     this.maxIterations = opts.maxIterations ?? 25;
     this.repairAttempts = opts.repairAttempts ?? 2;
+    this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
       .map((t) => ({ descriptor: t.descriptor, schema: t.schema }));
@@ -140,6 +145,13 @@ export class ReasoningEngine {
     args: unknown,
     correlationId: string,
   ): Promise<{ feedback: string; invalidArgs: boolean }> {
+    // Mutating tools (L3+) go through the executor and the no-audit-no-action
+    // gate. Read/draft tools (L0/L1) use the direct dispatcher.
+    const tool = this.registry.get(name);
+    if (tool && isMutatingTool(tool)) {
+      return this.executeMutation(tool, args, correlationId);
+    }
+
     const outcome = await dispatchTool(this.registry, name, args, {
       ...(this.ledger ? { ledger: this.ledger } : {}),
       ctx: this.toolContext,
@@ -166,6 +178,47 @@ export class ReasoningEngine {
         };
       case "error":
         return { feedback: `ERROR: tool "${name}" failed: ${outcome.error}`, invalidArgs: false };
+    }
+  }
+
+  /** Route a mutating tool through the gating executor. */
+  private async executeMutation(
+    tool: MutatingTool,
+    args: unknown,
+    correlationId: string,
+  ): Promise<{ feedback: string; invalidArgs: boolean }> {
+    const outcome = await this.executor.execute(tool, args, {
+      ...(this.ledger ? { ledger: this.ledger } : {}),
+      ctx: this.toolContext,
+      session_id: this.sessionId,
+      correlation_id: correlationId,
+      model: this.model.model,
+    });
+
+    switch (outcome.status) {
+      case "executed":
+        return {
+          feedback: `OK: ${outcome.summary}. Rollback: ${outcome.rollback_path}.`,
+          invalidArgs: false,
+        };
+      case "blocked":
+        return {
+          feedback:
+            `ERROR: "${tool.descriptor.name}" was blocked and NOT executed: ${outcome.reason}\n` +
+            `Correct the request and try again.`,
+          // A zod-validation block is repairable; surface it like invalid args.
+          invalidArgs: outcome.reason.startsWith("invalid tool args"),
+        };
+      case "audit_failed":
+        return {
+          feedback: `ERROR: "${tool.descriptor.name}" did not run: ${outcome.reason}`,
+          invalidArgs: false,
+        };
+      case "apply_failed":
+        return {
+          feedback: `ERROR: "${tool.descriptor.name}" failed after audit: ${outcome.reason}`,
+          invalidArgs: false,
+        };
     }
   }
 }

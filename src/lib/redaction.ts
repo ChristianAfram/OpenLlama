@@ -44,8 +44,12 @@ const SECRET_PATTERNS: { name: string; re: RegExp }[] = [
     name: "env_assignment",
     re: /\b(?:secret|password|passwd|token|api[_-]?key|private[_-]?key)\s*=\s*['"]?[^\s'"]{8,}/i,
   },
-  // Long base64-like blobs (>= 40 chars of base64 alphabet)
-  { name: "base64_blob", re: /[A-Za-z0-9+/]{40,}={0,2}/ },
+  // NOTE: deliberately no generic "long base64/hex blob" rule. Such a heuristic
+  // matches legitimate, integrity-critical values — our own sha256 blob hashes,
+  // git object SHAs, content digests in data_changed — and redacting those would
+  // corrupt the audit record's replayability. Specific key formats above catch
+  // real credentials; high-entropy detection scoped to sensitive fields is a
+  // future refinement (tracked for the eval-hardened redaction in Prompt 7).
 ];
 
 /**

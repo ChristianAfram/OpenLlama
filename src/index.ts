@@ -11,6 +11,7 @@ import { Command } from "commander";
 import { registerAgentCommand } from "./commands/agent.js";
 import { registerAuditCommand } from "./commands/audit.js";
 import { registerChatCommand } from "./commands/chat.js";
+import { registerExecCommand } from "./commands/exec.js";
 
 const program = new Command();
 
@@ -25,6 +26,7 @@ program
 registerAgentCommand(program);
 registerAuditCommand(program);
 registerChatCommand(program);
+registerExecCommand(program);
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
