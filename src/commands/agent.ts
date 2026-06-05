@@ -17,6 +17,7 @@ import { OllamaModelClient } from "../reasoning/model-client.js";
 import { ReasoningEngine } from "../reasoning/engine.js";
 import { loadModelCatalog, checkModelGovernance } from "../lib/model-governance.js";
 import { RuleBasedVerifier } from "../kernel/verifier.js";
+import { getDefaultSnapshotStore } from "../kernel/snapshot.js";
 
 interface AgentOptions {
   model?: string;
@@ -70,6 +71,7 @@ export function registerAgentCommand(program: Command): void {
         maxIterations: Number(options.maxIterations),
         verifier: new RuleBasedVerifier(),
         model_eval_passed: governance.eval_passed,
+        snapshots: getDefaultSnapshotStore(),
       });
 
       try {

@@ -52,6 +52,7 @@ export const writeFileTool: MutatingTool<z.infer<typeof schema>> = {
       target: args.path,
       data_changed: [{ path: args.path, before_hash: null, after_hash: afterHash }],
       rollback_path: `delete ${args.path}`,
+      reversal: { kind: "delete_created_file", path: args.path },
       summary: `created new file ${args.path} (${String(Buffer.byteLength(args.content))} bytes)`,
       apply: () => {
         // Re-check at apply time to avoid a TOCTOU overwrite if the file

@@ -1,0 +1,95 @@
+name: rollback
+
+# Rollback engine functional verification (Prompt 10 / framework §19, §49).
+#
+# Proves the rollback engine is structurally operational:
+#   1. write_file → audit rollback deletes the file and records a rollback event.
+#   2. audit metrics produces output without error.
+#   3. audit export --otel produces OTel-format JSONL.
+#
+# The full rollback correctness suite (edit_file restore, precondition checks,
+# not_found, already_reversed, irrecoverable) is covered by the eval suite
+# (rollback-correctness category) and tests/rollback.test.ts, both run in ci.yml.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  OPENLLAMA_AUDIT_DB: /tmp/openllama-ci-rollback/audit.sqlite
+  OPENLLAMA_CONFIG_DIR: /tmp/openllama-ci-rollback
+
+jobs:
+  rollback:
+    name: rollback verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup temp repo and write a file through the kernel
+        run: |
+          mkdir -p /tmp/rb-ci-repo
+          node dist/index.js exec write_file \
+            --json '{"path":"ci-test.txt","content":"rollback ci test\n"}' \
+            --cwd /tmp/rb-ci-repo
+
+      - name: Verify file exists after write
+        run: test -f /tmp/rb-ci-repo/ci-test.txt
+
+      - name: Get the event_id of the most recent mutation (from JSONL export)
+        run: |
+          # The SIEM JSONL export returns events in seq order; take the last one
+          # (the write_file we just executed).
+          EVENT_ID=$(node dist/index.js audit export --siem | \
+            python3 -c "import sys,json; lines=sys.stdin.readlines(); print(json.loads(lines[-1])['event_id'])")
+          echo "EVENT_ID=$EVENT_ID" >> "$GITHUB_ENV"
+          echo "event_id: $EVENT_ID"
+
+      - name: Roll back the write_file mutation
+        run: |
+          node dist/index.js audit rollback "$EVENT_ID" --cwd /tmp/rb-ci-repo
+
+      - name: Verify file was deleted by rollback
+        run: test ! -f /tmp/rb-ci-repo/ci-test.txt
+
+      - name: Verify audit chain is still intact after rollback
+        run: node dist/index.js audit verify
+
+      - name: audit metrics produces output
+        run: |
+          node dist/index.js audit metrics | grep "Total events"
+
+      - name: audit export --siem produces JSONL
+        run: |
+          node dist/index.js audit export --siem | head -5 | python3 -c "
+          import sys, json
+          for line in sys.stdin:
+            json.loads(line)
+          print('JSONL valid')
+          "
+
+      - name: audit export --otel produces OTel JSONL
+        run: |
+          node dist/index.js audit export --otel | head -5 | python3 -c "
+          import sys, json
+          for line in sys.stdin:
+            rec = json.loads(line)
+            assert 'timeUnixNano' in rec, 'missing timeUnixNano'
+            assert 'attributes' in rec, 'missing attributes'
+          print('OTel JSONL valid')
+          "

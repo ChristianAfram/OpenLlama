@@ -67,6 +67,13 @@ export const editFileTool: MutatingTool<z.infer<typeof schema>> = {
       target: args.path,
       data_changed: [{ path: args.path, before_hash: beforeHash, after_hash: afterHash }],
       rollback_path: `restore ${args.path} from audit event before_hash=${beforeHash}`,
+      reversal: {
+        kind: "restore_file",
+        path: args.path,
+        before_content: before,
+        before_hash: beforeHash,
+        after_hash: afterHash,
+      },
       summary: `edited ${args.path} (${changeDesc})`,
       apply: () => {
         // Re-read at apply time; if the file changed between plan and apply,

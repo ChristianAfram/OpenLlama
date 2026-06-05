@@ -1,0 +1,101 @@
+# Service catalog (framework §12, Master Plan §14).
+#
+# Every production service must be registered with owner, tier, risk level,
+# dashboard, runbook, SLO, dependencies, data classification, and rollback path.
+# Pre-alpha: all services are LOCAL ONLY tier.
+
+- service: openllama-agent
+  owner: chris
+  tier: local-only
+  risk_level: high
+  repo: .
+  runtime: node
+  dashboard: "openllama audit metrics"
+  runbook: docs/runbook.md
+  slo: docs/slo/openllama.md
+  dependencies:
+    - audit-ledger
+    - snapshot-store
+    - kill-switch-state
+    - ollama (local model server)
+  data_classification:
+    - internal
+  healthcheck: "openllama audit verify"
+  deployment: manual (npm run build)
+  rollback: docs/rollback.md
+  alerts:
+    - kill_switch_active
+    - chain_broken
+    - consecutive_denial_peak
+
+- service: audit-ledger
+  owner: chris
+  tier: local-only
+  risk_level: high
+  repo: .
+  runtime: sqlite (better-sqlite3)
+  dashboard: "openllama audit show"
+  runbook: docs/runbook.md
+  slo: docs/slo/openllama.md
+  dependencies: []
+  data_classification:
+    - internal
+  healthcheck: "openllama audit verify"
+  deployment: created on first write
+  rollback: "append-only; export JSONL as backup before destructive ops"
+  alerts:
+    - chain_broken
+
+- service: snapshot-store
+  owner: chris
+  tier: local-only
+  risk_level: medium
+  repo: .
+  runtime: filesystem (content-addressed blobs)
+  dashboard: "ls ~/.local/share/openllama/snapshots/ | wc -l"
+  runbook: docs/runbook.md
+  slo: docs/slo/openllama.md
+  dependencies: []
+  data_classification:
+    - internal
+  healthcheck: n/a
+  deployment: created on first write
+  rollback: "blobs are recreatable from git history"
+  alerts: []
+
+- service: rollback-engine
+  owner: chris
+  tier: local-only
+  risk_level: high
+  repo: .
+  runtime: node
+  dashboard: "openllama audit metrics (rollback_count)"
+  runbook: docs/runbook.md
+  slo: docs/slo/openllama.md
+  dependencies:
+    - audit-ledger
+    - snapshot-store
+  data_classification:
+    - internal
+  healthcheck: n/a
+  deployment: embedded in openllama CLI
+  rollback: "rollback engine itself cannot be rolled back; re-apply mutation manually"
+  alerts: []
+
+- service: kill-switch
+  owner: chris
+  tier: local-only
+  risk_level: high
+  repo: .
+  runtime: filesystem (JSON state file)
+  dashboard: "openllama kill-switch status"
+  runbook: docs/runbook.md
+  slo: docs/slo/openllama.md
+  dependencies: []
+  data_classification:
+    - internal
+  healthcheck: "openllama kill-switch status"
+  deployment: created on first activation
+  rollback: "openllama kill-switch deactivate"
+  alerts:
+    - kill_switch_active

@@ -44,6 +44,7 @@ import type { PolicyInput } from "../policy/types.js";
 import { isSecretPath } from "../lib/redaction.js";
 import type { KillSwitch } from "./kill-switch.js";
 import type { Verifier } from "./verifier.js";
+import type { SnapshotStore } from "./snapshot.js";
 
 export class ExecutorError extends Error {
   override name = "ExecutorError";
@@ -91,6 +92,13 @@ export interface ExecuteOptions {
    * at startup). Threaded into PolicyInput so model_governance rule fires.
    */
   model_eval_passed?: boolean;
+  /**
+   * Snapshot store (Prompt 10). When provided, the executor captures the prior
+   * bytes of a reversible content mutation (edit_file) BEFORE the audit write,
+   * guaranteeing every `executed` content edit has a recoverable before-state.
+   * If the snapshot cannot be captured, the edit is refused rather than run.
+   */
+  snapshots?: SnapshotStore;
 }
 
 // (classifyStub removed — Prompt 4 wires in the real deterministic classifier)
@@ -299,6 +307,23 @@ export class Executor {
       );
       if (gate.status === "blocked") return gate;
       approvalFields = gate.fields;
+    }
+
+    // 3d. Snapshot before-state for reversible mutations (Prompt 10).
+    //     Capture BEFORE the audit write so an `executed` ledger event always
+    //     has a matching snapshot that the rollback engine can retrieve.
+    //     A snapshot failure blocks the mutation rather than producing an
+    //     "executed" event with no recovery path.
+    if (opts.snapshots && planned.reversal?.kind === "restore_file") {
+      try {
+        opts.snapshots.put(planned.reversal.before_content);
+      } catch (err) {
+        const reason = `snapshot capture failed; side effect NOT performed: ${
+          err instanceof Error ? err.message : String(err)
+        }`;
+        const event_id = this.tryLogBlocked(ledger, auditBase, reason);
+        return { status: "blocked", event_id, reason };
+      }
     }
 
     // 4. Audit the (about-to-happen) mutation. THIS IS THE GATE.

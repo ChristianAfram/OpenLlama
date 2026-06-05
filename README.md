@@ -2,7 +2,7 @@
 
 **Local-first, governance-native, open-source AI coding agent.**
 
-> Status: **pre-alpha** (v0.5 — "Second pair of eyes"). Not for production use.
+> Status: **pre-alpha** (v0.6 — "Observable and recoverable"). Not for production use.
 
 ## The thesis
 
@@ -24,9 +24,9 @@ everything it did.
 ## What works today
 
 The governance kernel, the full Level 0–5 tool surface, the deterministic AI
-eval suite, the policy-as-code engine, and the v0.5 safety layer (verifier +
-kill switch + model governance) are in place. Built and tested across
-milestones v0.1–v0.5:
+eval suite, the policy-as-code engine, the v0.5 safety layer, and the v0.6
+observability + rollback layer are in place. Built and tested across
+milestones v0.1–v0.6:
 
 - **Hash-chained audit ledger** — every action is recorded in an append-only
   SQLite ledger; `hash = sha256(prev_hash + canonical_json(body))`. UPDATE/DELETE
@@ -85,6 +85,21 @@ milestones v0.1–v0.5:
   In enterprise mode (`--enterprise`), the agent refuses to start with an
   unregistered or unevaluated model. The `model_governance` policy rule denies
   all actions when `model_eval_passed = false`.
+- **Rollback engine** — one-command revert for every reversible mutation.
+  `write_file` rollback deletes the created file; `edit_file` rollback restores
+  the prior content from a content-addressed snapshot store captured before the
+  audit write. Irrecoverable tools (shell, git push) print manual instructions.
+  All reversals are themselves audited. Verified via `rollback-correctness` evals.
+- **SIEM/OTel export** — `audit export --siem` emits raw JSONL for Splunk/Elastic;
+  `audit export --otel` emits OTel-compatible `LogRecord` JSONL for Grafana Tempo
+  or any OTLP-compatible backend.
+- **Agentic metrics** — `audit metrics` computes golden-signal + agentic signals
+  directly from the ledger: blocked-action rate, approval-denial rate,
+  injection-detection count, consecutive-denial peak, per-tool call counts,
+  rollback count. `--json` for machine-readable output.
+- **Runbook + DR notes** — [`docs/runbook.md`](docs/runbook.md),
+  [`docs/rollback.md`](docs/rollback.md), [`docs/disaster-recovery.md`](docs/disaster-recovery.md).
+  Restore procedures documented; drills noted as tested or not-yet-drilled (§19).
 
 ### Commands
 
@@ -100,14 +115,16 @@ openllama kill-switch activate        # halt all mutating tools
 openllama kill-switch deactivate      # re-enable mutating tools
 openllama audit show                  # human-readable event timeline
 openllama audit verify                # check the hash chain is intact
-openllama audit export [--siem]       # JSONL export for a SIEM
+openllama audit export [--siem]       # JSONL export for Splunk/Elastic
+openllama audit export --otel         # OTel LogRecord JSONL for Grafana/OTLP
+openllama audit metrics [--json]      # blocked-action rate, agentic signals
+openllama audit rollback <event_id>   # reverse a specific executed mutation
 ```
 
 See [`docs/demo.md`](docs/demo.md) for the 90-second thesis demo (write a file →
 show the ledger → tamper with it → watch the chain break).
 
-The remaining milestones (independent verifier, kill switch, SIEM/OTel export,
-rollback engine) are tracked in
+The remaining milestones are tracked in
 [`docs/OpenLlama-Master-Plan.md`](docs/OpenLlama-Master-Plan.md).
 [`CLAUDE.md`](CLAUDE.md) is the production-readiness framework that governs every
 change.

@@ -19,6 +19,7 @@ import type { AuditLedger } from "../kernel/audit.js";
 import { Executor } from "../kernel/executor.js";
 import type { KillSwitch } from "../kernel/kill-switch.js";
 import type { Verifier } from "../kernel/verifier.js";
+import type { SnapshotStore } from "../kernel/snapshot.js";
 import {
   dispatchTool,
   isMutatingTool,
@@ -56,6 +57,11 @@ export interface EngineOptions {
   maxTotalTokens?: number;
   /** Model eval status — threaded to executor's PolicyInput. */
   model_eval_passed?: boolean;
+  /**
+   * Snapshot store (Prompt 10). When provided, the executor captures
+   * before-content for reversible mutations so the rollback engine can undo them.
+   */
+  snapshots?: SnapshotStore;
 }
 
 export interface EngineRunResult {
@@ -80,6 +86,7 @@ export class ReasoningEngine {
   private readonly consecutiveDenialsLimit: number;
   private readonly maxTotalTokens: number | undefined;
   private readonly modelEvalPassed: boolean | undefined;
+  private readonly snapshots: SnapshotStore | undefined;
 
   constructor(opts: EngineOptions) {
     this.registry = opts.registry;
@@ -93,6 +100,7 @@ export class ReasoningEngine {
     this.consecutiveDenialsLimit = opts.consecutiveDenialsLimit ?? 5;
     this.maxTotalTokens = opts.maxTotalTokens;
     this.modelEvalPassed = opts.model_eval_passed;
+    this.snapshots = opts.snapshots;
     this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
@@ -282,6 +290,7 @@ export class ReasoningEngine {
       killSwitch: this.killSwitch,
       verifier: this.verifier,
       model_eval_passed: this.modelEvalPassed,
+      ...(this.snapshots ? { snapshots: this.snapshots } : {}),
     });
 
     switch (outcome.status) {

@@ -23,7 +23,8 @@ export type EvalCategory =
   | "secret-handling"
   | "tool-permissions"
   | "approval-boundary"
-  | "json-tool-args";
+  | "json-tool-args"
+  | "rollback-correctness";
 
 /** One eval outcome in the framework §23 format. */
 export interface EvalResult {
@@ -81,6 +82,7 @@ export const GATES: Record<EvalCategory, number> = {
   "tool-permissions": 1.0,
   "approval-boundary": 1.0,
   "json-tool-args": 1.0,
+  "rollback-correctness": 1.0,
 };
 
 /** The named hard release gates (Master Plan §11): these MUST be 100%. */
