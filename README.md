@@ -1,6 +1,6 @@
 # OpenLlama
 
-**Local-first, governance-native, open-source AI coding agent.**
+**The auditable coding agent. Local-first, governance-native, compliance-ready. The agent your security team signs off on.**
 
 > Status: **public beta** (v0.7 — "Public beta"). Local-only. See [`docs/production-readiness.md`](docs/production-readiness.md) for the CONDITIONAL GO decision.
 
@@ -20,6 +20,29 @@ action does not run. There is no flag, mode, or fast path that bypasses this.
 The claim is not "best agent." It is **"the best agent you are allowed to run"** —
 on your own hardware, against local models, with a verifiable record of
 everything it did.
+
+## How it compares
+
+The coding-agent market has split into two camps that do not overlap: **capability** (fast, autonomous, no paper trail) and **governance** (closed SaaS proxies that wrap cloud tools). Nobody has fused them. OpenLlama is built in that seam.
+
+| Tool | License | Local models | Audit / evidence | Gap |
+|------|---------|-------------|-----------------|-----|
+| **Claude Code** | Closed | No (Anthropic only) | Session-scoped, not tamper-evident | Cloud-only; model lock-in; no on-prem audit |
+| **OpenCode** (~165k★) | MIT | Yes (75+ providers) | None by design — "stores nothing" | No audit trail; governance is the user's problem |
+| **OpenAI Codex CLI** (~85k★) | Apache-2.0 | Limited | Execution logs, no governance kernel | Cloud-tuned; no policy-as-code |
+| **Hermes Agent** (Nous) | Open | Yes (any endpoint) | Memory/sessions, not compliance-grade | General agent, not a governed coding specialist |
+| **OpenHands** (~75k★) | Open | Yes | Task logs | No compliance posture |
+| **Cline** (~62k★) | Open | Yes | Limited | No governance kernel |
+| **VibeFlow / PolicyLayer** | Closed SaaS | n/a (wraps cloud) | Tamper-evident — as a paid external layer | Closed; cloud-dependent; third party holds your evidence |
+| **OpenLlama** | MIT | Yes (Ollama) | Hash-chained, append-only, on-prem, exportable | Local-model quality ceiling (see [§22](docs/OpenLlama-Master-Plan.md)) |
+
+**Why this seam is structurally unoccupied:** capability tools cannot add a tamper-evident kernel without abandoning the frictionless, store-nothing identity their whole pitch rests on. Governance SaaS tools cannot go local-first open-source without cannibalising the SaaS layer that is their business model.
+
+**Who it is for:** EU/DE regulated teams (finance, health, legal, public sector), security/GRC personas, and privacy-first developers who want local autonomy *and* a personal audit trail.
+
+**Who it is NOT for:** teams who want the fastest possible autonomous coding on frontier cloud models with zero friction. That is Claude Code / OpenCode territory. OpenLlama trades raw capability ceiling for provable control. If you have no compliance or sovereignty pressure, use one of those tools.
+
+**Compliance context:** the artifacts OpenLlama produces (hash-chained ledger, SIEM export, exception records) are relevant to SOC 2 TSC, HIPAA §164.312(b), CMMC AU.2.042, NYDFS Part 500, and the EU AI Act's lifetime-logging requirement. OpenLlama does not *certify* compliance — that requires your org policy and a third-party auditor. It provides the evidence layer that *supports* an audit.
 
 ## What works today
 
@@ -172,6 +195,8 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest
 npm run build       # tsup -> dist/
 ```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contribution guide and risk classification requirements.
 
 ## License
 

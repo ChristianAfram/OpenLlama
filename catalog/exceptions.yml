@@ -66,3 +66,26 @@
     any approval. L5 actions require a manual, action-specific confirmation
     phrase from the operator. The agent loop is given no approval channel.
   status: active
+
+- exception_id: EX-2026-004
+  risk: "OpenLlama name collides with OpenLLaMA weights project; 'Llama' is a Meta trademark"
+  impact: >-
+    Search collision with OpenLM Research's OpenLLaMA weights project creates brand confusion.
+    Using 'Llama' in the product name may conflict with Meta's branding/acceptable-use rules
+    for the Llama model family. Risk is reputational and potentially legal; no technical impact.
+  reason: >-
+    The name was chosen as a working title before the collision was fully assessed (§23 of the
+    master plan flags this explicitly). Renaming before v0.8 requires a decision on a new brand,
+    a domain, updated references throughout the codebase, and announcement coordination.
+    The work is non-trivial and the project is pre-1.0. This window is used to collect
+    evidence and make an informed decision rather than rushing a rename.
+  owner: chris
+  approved_by: chris
+  created_at: 2026-06-05
+  expires_at: 2026-12-31
+  compensating_control: >-
+    (a) No commercial distribution of binaries under the OpenLlama name until the trademark
+    question is resolved. (b) Source-only distribution via git during v0.7 public beta limits
+    exposure. (c) The master plan §23 is public: any early adopters are informed of the risk.
+    (d) The rename will happen before v1.0 production launch.
+  status: active

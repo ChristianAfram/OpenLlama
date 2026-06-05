@@ -1,0 +1,115 @@
+name: release
+
+# Release workflow — triggered by a version tag (v*.*.*).
+#
+# Steps:
+#   1. Build the project (tsup → dist/).
+#   2. Regenerate sbom.json and attach it to the release.
+#   3. Run npm audit --audit-level=high (block on vulnerabilities).
+#   4. Create a GitHub Release as a draft (maintainer reviews and publishes).
+#
+# Binary signing (cosign / GPG) is deferred to v0.8 — tracked as EX-2026-002.
+# Until then, source distribution via git (verifiable commit SHA) is the
+# integrity mechanism; the attached SBOM gives users a verifiable dependency list.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release · build · sbom · publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high
+
+      - name: Generate SBOM
+        run: npm run sbom
+
+      - name: Validate SBOM
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          with open("sbom.json") as f:
+              sbom = json.load(f)
+          bom_format = sbom.get("bomFormat", "")
+          spec_version = sbom.get("specVersion", "")
+          components = sbom.get("components", [])
+          if bom_format != "CycloneDX":
+              print(f"ERROR: unexpected bomFormat: {bom_format}")
+              sys.exit(1)
+          if not spec_version.startswith("1."):
+              print(f"ERROR: unexpected specVersion: {spec_version}")
+              sys.exit(1)
+          if len(components) == 0:
+              print("ERROR: SBOM contains no components")
+              sys.exit(1)
+          print(f"SBOM OK: CycloneDX {spec_version}, {len(components)} components")
+          EOF
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify package.json version matches tag
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: package.json version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "Version match: $PKG_VERSION"
+
+      - name: Create GitHub Release (draft)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: sbom.json
+          name: "OpenLlama ${{ steps.version.outputs.version }}"
+          body: |
+            ## OpenLlama ${{ steps.version.outputs.version }}
+
+            See [CHANGELOG](https://github.com/christianafram/openllama/blob/main/CHANGELOG.md) for details.
+
+            ### Integrity
+
+            This release is source-distributed via git. The attached `sbom.json` (CycloneDX 1.6)
+            provides a verifiable inventory of all runtime dependencies.
+
+            Binary signing (cosign/GPG) is planned for v0.8 — tracked as exception EX-2026-002.
+
+            ### Install
+
+            ```bash
+            git clone https://github.com/christianafram/openllama.git
+            cd openllama && git checkout ${{ steps.version.outputs.version }}
+            npm install && npm run build
+            ```
+
+            See [docs/install.md](https://github.com/christianafram/openllama/blob/main/docs/install.md) for full instructions.

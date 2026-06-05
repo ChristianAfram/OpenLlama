@@ -1,6 +1,6 @@
 {
   "name": "openllama",
-  "version": "0.1.0-pre.0",
+  "version": "0.7.0",
   "description": "Local-first, governance-native, open-source AI coding agent. No tool that mutates the world runs unless an audit write succeeds first.",
   "type": "module",
   "license": "MIT",
