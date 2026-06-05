@@ -1,0 +1,55 @@
+name: policy
+
+# Policy-as-code gate (Master Plan §8, framework §8/§25).
+# Two enforcement points:
+#   1. The exception lifecycle gate — an active exception past its expiry, or one
+#      missing an owner / expiry / compensating control, FAILS the build.
+#   2. Policy decision smoke checks — the bundle denies a secret-path write and
+#      requires confirmation for a Level 5 action.
+# The full decision matrix is exercised by `npm test` (tests/policy*.test.ts);
+# this workflow is the explicit, named release gate.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: policy gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Exception lifecycle gate (fails on expired / malformed)
+        run: node dist/index.js policy exceptions
+
+      - name: Policy denies a secret-path write
+        run: |
+          decision=$(node dist/index.js policy test --json \
+            '{"tool":"write_file","permission_level":5,"risk_level":"critical","target":".env","secret_path":true}' \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).decision))')
+          echo "decision=$decision"
+          test "$decision" = "DENY"
+
+      - name: Policy requires confirmation for a Level 5 action
+        run: |
+          decision=$(node dist/index.js policy test --json \
+            '{"tool":"run_shell","permission_level":5,"risk_level":"critical","command":"rm -rf x"}' \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).decision))')
+          echo "decision=$decision"
+          test "$decision" = "REQUIRE_CONFIRMATION"

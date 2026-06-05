@@ -36,6 +36,9 @@ import {
   type ApprovalProvider,
   type ApprovalRequest,
 } from "./approval.js";
+import { getDefaultPolicyEngine, type PolicyEngine } from "../policy/engine.js";
+import type { PolicyInput } from "../policy/types.js";
+import { isSecretPath } from "../lib/redaction.js";
 
 export class ExecutorError extends Error {
   override name = "ExecutorError";
@@ -62,12 +65,24 @@ export interface ExecuteOptions {
   approvals?: ApprovalProvider;
   /** Who is requesting the action (recorded in the approval request). */
   requested_by?: string;
+  /**
+   * Enterprise hard-block mode: policy violations cannot be downgraded
+   * (e.g. dependency install / non-allowlisted egress become DENY).
+   */
+  enterprise?: boolean;
 }
 
 // (classifyStub removed — Prompt 4 wires in the real deterministic classifier)
 
 export class Executor {
-  constructor(private readonly defaultLedger?: AuditSink) {}
+  private readonly policy: PolicyEngine;
+
+  constructor(
+    private readonly defaultLedger?: AuditSink,
+    policy?: PolicyEngine,
+  ) {
+    this.policy = policy ?? getDefaultPolicyEngine();
+  }
 
   private ledger(opts: ExecuteOptions): AuditSink {
     return opts.ledger ?? this.defaultLedger ?? getDefaultLedger();
@@ -155,22 +170,55 @@ export class Executor {
       command: typeof parsedArgs["command"] === "string" ? parsedArgs["command"] : undefined,
     });
 
-    // Rebuild audit base with the classified (possibly raised) level/risk.
+    const classifiedRisk = levelToRisk(classification.level);
+
+    // 3a. Evaluate the policy bundle (Prompt 8). Policy turns the classified
+    //     level into a decision (ALLOW / REQUIRE_APPROVAL / REQUIRE_CONFIRMATION
+    //     / DENY) with a reason code. Policy sits between classification and the
+    //     approval gate: the classifier says how risky; policy says what to do.
+    const policyInput: PolicyInput = {
+      tool: tool.descriptor.name,
+      permission_level: classification.level,
+      risk_level: classifiedRisk,
+      ...(planned.target !== undefined ? { target: planned.target } : {}),
+      args: parsedArgs,
+      ...(typeof parsedArgs["command"] === "string" ? { command: parsedArgs["command"] } : {}),
+      ...(typeof parsedArgs["git_branch"] === "string"
+        ? { git_branch: parsedArgs["git_branch"] }
+        : typeof parsedArgs["branch"] === "string"
+          ? { git_branch: parsedArgs["branch"] as string }
+          : {}),
+      secret_path: planned.target !== undefined ? isSecretPath(planned.target) : false,
+      audit_available: true,
+      enterprise: opts.enterprise ?? false,
+    };
+    const policy = this.policy.evaluate(policyInput);
+
+    // Rebuild audit base with the classified (possibly raised) level/risk and the
+    // policy decision. policy_reason prefers the classifier's specific reason when
+    // a hard rule fired (e.g. "destructive token"), else the policy reason.
     const auditBase: AppendInput = {
       ...base,
       permission_level: classification.level,
-      risk_level: levelToRisk(classification.level),
-      ...(classification.rule_id !== "DESCRIPTOR_DEFAULT"
-        ? { policy_reason: classification.reason }
-        : {}),
+      risk_level: classifiedRisk,
+      policy_decision: policy.decision,
+      policy_reason:
+        classification.rule_id !== "DESCRIPTOR_DEFAULT" ? classification.reason : policy.reason,
     };
 
-    // 3b. The approval gate. Levels 4/5 may only proceed with a scoped, expiring
-    //     grant (L5 also requires a manual confirmation phrase). The grant comes
-    //     from an injected provider — never from the agent itself. Levels 0–3
-    //     skip this entirely.
+    // 3b. Enforce the policy decision.
+    //  - DENY                 → blocked, no approval can rescue it.
+    //  - REQUIRE_APPROVAL     → scoped, expiring grant required.
+    //  - REQUIRE_CONFIRMATION → grant + manual, action-specific phrase (every time).
+    //  - ALLOW                → proceed (still audited).
+    // The grant always comes from an injected provider — never the agent itself.
     let approvalFields: Partial<AppendInput> = {};
-    if (classification.level >= 4) {
+    if (policy.decision === "DENY") {
+      const reason = `policy denied: ${policy.reason}`;
+      const event_id = this.tryLogBlocked(ledger, auditBase, reason);
+      return { status: "blocked", event_id, reason };
+    }
+    if (policy.decision === "REQUIRE_APPROVAL" || policy.decision === "REQUIRE_CONFIRMATION") {
       const gate = await this.runApprovalGate(
         ledger,
         auditBase,
@@ -178,6 +226,7 @@ export class Executor {
         tool,
         planned,
         classification.level,
+        policy.decision === "REQUIRE_CONFIRMATION",
       );
       if (gate.status === "blocked") return gate;
       approvalFields = gate.fields;
@@ -236,11 +285,11 @@ export class Executor {
     tool: MutatingTool,
     planned: { target?: string; data_changed: AppendInput["data_changed"]; rollback_path: string; summary: string },
     level: number,
+    requiresConfirmation: boolean,
   ): Promise<
     | { status: "blocked"; event_id: string; reason: string }
     | { status: "ok"; fields: Partial<AppendInput> }
   > {
-    const requiresConfirmation = level >= 5;
     const decisionField = requiresConfirmation ? "REQUIRE_CONFIRMATION" : "REQUIRE_APPROVAL";
 
     const provider = opts.approvals;

@@ -16,6 +16,7 @@ import { CliApprovalProvider } from "../kernel/approval-cli.js";
 interface ExecOptions {
   json?: string;
   cwd?: string;
+  enterprise?: boolean;
 }
 
 export function registerExecCommand(program: Command): void {
@@ -25,6 +26,7 @@ export function registerExecCommand(program: Command): void {
     .argument("<tool>", "tool name, e.g. read_file or write_file")
     .option("--json <args>", "tool arguments as a JSON object", "{}")
     .option("--cwd <dir>", "repository root (default: current dir)")
+    .option("--enterprise", "enterprise mode: policy violations are hard blocks")
     .action(async (toolName: string, options: ExecOptions) => {
       const repoRoot = resolve(options.cwd ?? process.cwd());
       const registry = buildDefaultRegistry();
@@ -52,6 +54,7 @@ export function registerExecCommand(program: Command): void {
           ctx: { repoRoot },
           approvals: new CliApprovalProvider(),
           requested_by: "user:cli",
+          ...(options.enterprise ? { enterprise: true } : {}),
         });
         switch (outcome.status) {
           case "executed":
