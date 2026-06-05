@@ -20,4 +20,4 @@
     Scoped, expiring approval grants enforced by the kernel (verifyGrant); L5
     requires a manual, action-specific confirmation phrase; the agent loop is
     given no approval channel, so it can never approve its own action.
-  status: active
+  status: resolved

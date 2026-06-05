@@ -1,0 +1,57 @@
+name: kill-switch
+
+# Kill-switch functional verification (Prompt 9 / framework §44).
+#
+# Proves the kill switch is structurally operational:
+#   1. Inactive by default (status exits 0).
+#   2. Activates correctly (status exits 1; state persisted to disk).
+#   3. Deactivates correctly (status returns to 0).
+#
+# The kill-switch integration with the executor (blocking ALL mutations when
+# active) is covered by tests/kill-switch.test.ts and the `npm test` step in
+# ci.yml — this workflow is the named, CLI-level gate for the feature.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  OPENLLAMA_CONFIG_DIR: /tmp/openllama-ci
+
+jobs:
+  kill-switch:
+    name: kill-switch verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Kill switch is inactive by default
+        run: node dist/index.js kill-switch status
+
+      - name: Kill switch activates
+        run: |
+          node dist/index.js kill-switch activate --reason "ci verification"
+          node dist/index.js kill-switch status && exit 1 || true
+          # status exits 1 when active — the `|| true` suppresses the shell error;
+          # but we verify the output says ACTIVE:
+          node dist/index.js kill-switch status 2>&1 | grep -q "ACTIVE"
+
+      - name: Kill switch deactivates
+        run: |
+          node dist/index.js kill-switch deactivate
+          node dist/index.js kill-switch status
