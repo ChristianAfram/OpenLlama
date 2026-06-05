@@ -1,5 +1,5 @@
 /**
- * `openllama exec <tool> --json '<args>'` — run a single tool through the kernel
+ * `opencli exec <tool> --json '<args>'` — run a single tool through the kernel
  * without the model. A developer/demo affordance that exercises the exact gated
  * path: read/draft tools dispatch directly; mutating tools route through the
  * executor and the no-audit-no-action invariant. Every run is audited.

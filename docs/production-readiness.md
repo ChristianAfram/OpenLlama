@@ -6,7 +6,7 @@
 
 ## Project
 
-OpenLlama — local-first, governance-native, open-source AI coding agent.
+OpenCLI — local-first, governance-native, open-source AI coding agent.
 
 ## Owner
 
@@ -44,7 +44,7 @@ Conditions:
 
 ## 1. Summary
 
-**What is launching:** OpenLlama v0.7 "Public beta" — the governance kernel,
+**What is launching:** OpenCLI v0.7 "Public beta" — the governance kernel,
 full L0–L5 tool surface, policy-as-code engine, approval gate, kill switch,
 independent verifier, rollback engine, SIEM/OTel export, and agentic metrics.
 
@@ -71,7 +71,7 @@ automated; model file integrity not verified.
 
 ### Flow 1: Agent task with audit trail
 
-**Expected:** `openllama agent "<task>"` runs the reasoning loop; every mutation
+**Expected:** `opencli agent "<task>"` runs the reasoning loop; every mutation
 is recorded in the hash-chained ledger; `audit verify` confirms chain intact.
 
 **Test result:** Covered by executor invariant tests (`tests/executor.test.ts`),
@@ -92,7 +92,7 @@ exfiltration, approve-all variants).
 
 ### Flow 3: Mutation rollback
 
-**Expected:** `openllama audit rollback <event_id>` reverses a `write_file` or
+**Expected:** `opencli audit rollback <event_id>` reverses a `write_file` or
 `edit_file` mutation; verifies hash preconditions; appends a rollback audit event.
 
 **Test result:** `rollback-correctness` eval category (6 cases, 100% gate) +
@@ -104,7 +104,7 @@ exfiltration, approve-all variants).
 
 ## 3. Architecture
 
-**Main services:** openllama-agent, audit-ledger, snapshot-store, rollback-engine, kill-switch
+**Main services:** opencli-agent, audit-ledger, snapshot-store, rollback-engine, kill-switch
 
 **Data flow:** user instruction → reasoning engine → tool call (zod-validated) →
 classifier → policy engine → verifier → approval gate → executor (audit write → side effect)
@@ -114,13 +114,13 @@ classifier → policy engine → verifier → approval gate → executor (audit 
 **Failure modes:** Audit write failure blocks mutation (no-audit-no-action).
 Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is terminal.
 
-**Known risks:** See `docs/threat-models/openllama.md` residual risk section.
+**Known risks:** See `docs/threat-models/opencli.md` residual risk section.
 
 ---
 
 ## 4. Code
 
-**Repository:** christianafram/openllama
+**Repository:** christianafram/openllama (project name: OpenCLI)
 
 **Branch:** main (via PR from `claude/openllama-prompt-system-WsFR7`)
 
@@ -171,7 +171,7 @@ Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is
 
 **Prompt injection defense:** Trust-tier fencing; 100%-gate eval suite
 
-**Threat model:** `docs/threat-models/openllama.md`
+**Threat model:** `docs/threat-models/opencli.md`
 
 **Supply chain:** SBOM (sbom.json); npm audit; gitleaks; dependabot
 
@@ -205,9 +205,9 @@ Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is
 
 **Environments:** Single (local developer environment)
 
-**Secrets:** No secrets stored by OpenLlama; user's `.env` is denylist-protected
+**Secrets:** No secrets stored by OpenCLI; user's `.env` is denylist-protected
 
-**Storage:** SQLite + filesystem blobs in `~/.local/share/openllama/`
+**Storage:** SQLite + filesystem blobs in `~/.local/share/openllama/ (v0.7 legacy path)`
 
 **Cost estimate:** Local inference only; no cloud charges
 
@@ -223,7 +223,7 @@ Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is
 
 **Release:** `npm install && npm run build` → `node dist/index.js`
 
-**Rollback:** `git revert <commit>` at the infrastructure level; `openllama audit rollback` for per-mutation revert
+**Rollback:** `git revert <commit>` at the infrastructure level; `opencli audit rollback` for per-mutation revert
 
 **Feature flags:** Kill switch acts as a runtime feature flag for all mutating tools
 
@@ -231,11 +231,11 @@ Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is
 
 ## 10. Observability
 
-**Logs:** Hash-chained audit ledger (`openllama audit show`)
+**Logs:** Hash-chained audit ledger (`opencli audit show`)
 
-**Metrics:** `openllama audit metrics` — blocked-action rate, approval-denial rate, injection-detection count, consecutive-denial peak, rollback count
+**Metrics:** `opencli audit metrics` — blocked-action rate, approval-denial rate, injection-detection count, consecutive-denial peak, rollback count
 
-**Dashboards:** `docs/slo/openllama.md` — SLIs and targets
+**Dashboards:** `docs/slo/opencli.md` — SLIs and targets
 
 **Alerts:** Documented in `catalog/services.yml` (kill_switch_active, chain_broken, consecutive_denial_peak)
 
@@ -255,7 +255,7 @@ Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is
 
 **Rollback steps:** `docs/rollback.md`
 
-**Kill switches:** `openllama kill-switch activate` (manual + automated triggers)
+**Kill switches:** `opencli kill-switch activate` (manual + automated triggers)
 
 **Incident process:** `docs/runbook.md` → Common Failures + Recovery Steps
 
@@ -325,7 +325,7 @@ Kill switch blocks all L3+ mutations. Policy DENY is terminal. Verifier BLOCK is
 | Service ownership | 2 | All 5 services registered in catalog/services.yml |
 | Asset inventory | 2 | catalog/assets.yml complete for v0.7 scope |
 | Supply chain security | 2 | SBOM + npm audit + gitleaks + dependabot; no binary signing |
-| Threat model | 2 | docs/threat-models/openllama.md complete; residual risks documented |
+| Threat model | 2 | docs/threat-models/opencli.md complete; residual risks documented |
 | Disaster recovery | 2 | docs/disaster-recovery.md; drills partially tested |
 | Independent verification | 1 | Rule-based verifier; live second-model verifier deferred (EX-2026-003) |
 

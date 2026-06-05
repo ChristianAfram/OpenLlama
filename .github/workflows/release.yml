@@ -91,9 +91,9 @@ jobs:
           draft: true
           generate_release_notes: true
           files: sbom.json
-          name: "OpenLlama ${{ steps.version.outputs.version }}"
+          name: "OpenCLI ${{ steps.version.outputs.version }}"
           body: |
-            ## OpenLlama ${{ steps.version.outputs.version }}
+            ## OpenCLI ${{ steps.version.outputs.version }}
 
             See [CHANGELOG](https://github.com/christianafram/openllama/blob/main/CHANGELOG.md) for details.
 

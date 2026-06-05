@@ -5,7 +5,7 @@
  * record; the harness aggregates them per category and checks pass-rate gates.
  *
  * Design note — why these evals do not need a live model.
- * OpenLlama's headline guarantees (no prompt injection succeeds; destructive and
+ * OpenCLI's headline guarantees (no prompt injection succeeds; destructive and
  * L4/L5 actions are blocked without approval; secrets are never exfiltrated) are
  * STRUCTURAL — they live in the kernel, not the model. So the gating evals here
  * are deterministic: they drive the real executor/classifier/engine and assert

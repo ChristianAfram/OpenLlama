@@ -2,7 +2,7 @@
  * Minimal line-based unified diff.
  *
  * Implemented locally (LCS over lines) rather than adding a dependency, since
- * OpenLlama keeps its surface small and the diff is only used for *proposals*
+ * OpenCLI keeps its surface small and the diff is only used for *proposals*
  * (it never drives a write). Output follows the standard unified-diff format
  * so it renders in any diff viewer.
  */

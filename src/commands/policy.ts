@@ -1,5 +1,5 @@
 /**
- * `openllama policy …` — inspect and enforce policy-as-code (Master Plan §8).
+ * `opencli policy …` — inspect and enforce policy-as-code (Master Plan §8).
  *
  *   policy test --json '<action>'   evaluate a proposed action against the bundle
  *   policy exceptions [--file p]    validate the exception catalog (CI gate)

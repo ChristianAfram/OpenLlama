@@ -1,10 +1,10 @@
 /**
- * `openllama agent` — run the reasoning engine against a local model.
+ * `opencli agent` — run the reasoning engine against a local model.
  *
  * The agent can read files, list directories, search, and propose diffs to
  * answer a question about the repository. It modifies nothing: every action is
  * read-only or a draft, and every action is logged to the audit ledger
- * (inspect with `openllama audit show`).
+ * (inspect with `opencli audit show`).
  */
 
 import { join, resolve } from "node:path";
@@ -75,7 +75,7 @@ export function registerAgentCommand(program: Command): void {
       });
 
       try {
-        info(`openllama agent: ${model} @ ${host} (read-only + draft tools)`);
+        info(`opencli agent: ${model} @ ${host} (read-only + draft tools)`);
         const result = await engine.run(question);
         process.stdout.write(result.answer + "\n");
         info(

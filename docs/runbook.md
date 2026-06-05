@@ -1,4 +1,4 @@
-# Runbook: OpenLlama Agent
+# Runbook: OpenCLI Agent
 
 ## Owner
 
@@ -6,7 +6,7 @@ Project maintainer (christianafram54@gmail.com)
 
 ## Purpose
 
-OpenLlama is a local-first, governance-native AI coding agent. It reads source
+OpenCLI is a local-first, governance-native AI coding agent. It reads source
 files, proposes diffs, and — when the user approves — applies edits under a
 hash-chained audit invariant: **no tool that mutates the world runs unless an
 audit write succeeds first**.
@@ -15,14 +15,17 @@ audit write succeeds first**.
 
 | Flow | Trigger | What happens |
 |---|---|---|
-| Agent read | `openllama agent "<task>"` | Model produces tool calls; L0/L1 tools run via dispatcher |
+| Agent read | `opencli agent "<task>"` | Model produces tool calls; L0/L1 tools run via dispatcher |
 | Mutation (L3) | `write_file` | Executor: plan → snapshot (if needed) → audit write → apply |
 | Mutation (L4) | `edit_file`, `git commit` | As above + approval gate |
 | Mutation (L5) | `git push` to main | As above + manual confirmation phrase |
-| Kill switch | `openllama kill-switch activate` | All mutations blocked, ledger event written |
-| Rollback | `openllama audit rollback <event_id>` | Engine reverses the recorded mutation |
+| Kill switch | `opencli kill-switch activate` | All mutations blocked, ledger event written |
+| Rollback | `opencli audit rollback <event_id>` | Engine reverses the recorded mutation |
 
 ## Dependencies
+
+> **Note (v0.7):** Storage paths currently use the legacy `openllama` directory name for
+> backward compatibility. Migration to `opencli` paths is planned for v0.8.
 
 - **SQLite ledger** — `~/.local/share/openllama/audit.sqlite` (or `OPENLLAMA_AUDIT_DB`)
 - **Snapshot store** — `~/.local/share/openllama/snapshots/` (content-addressed blobs)
@@ -31,28 +34,28 @@ audit write succeeds first**.
 
 ## Dashboards
 
-`openllama audit metrics` — blocked-action rate, approval-denial rate,
+`opencli audit metrics` — blocked-action rate, approval-denial rate,
 injection-detection count, consecutive-denial peak, per-tool counts.
 
-`openllama audit show` — human-readable event timeline.
+`opencli audit show` — human-readable event timeline.
 
 ## Alerts (manual, local-only at this milestone)
 
 | Condition | Check | Action |
 |---|---|---|
-| Kill switch tripped | `openllama kill-switch status` exits 1 | Investigate `activated_at`, `triggered_by`, `reason`; deactivate when safe |
-| Chain broken | `openllama audit verify` exits 1 | Treat as incident; do not proceed with mutations |
+| Kill switch tripped | `opencli kill-switch status` exits 1 | Investigate `activated_at`, `triggered_by`, `reason`; deactivate when safe |
+| Chain broken | `opencli audit verify` exits 1 | Treat as incident; do not proceed with mutations |
 | Consecutive denials | `audit metrics` shows peak ≥ 5 | Review blocked events; check for model compromise or prompt injection |
 
 ## Common Failures
 
 ### "kill switch is active" on every mutation
 **Cause:** kill switch was activated (manual, consecutive denials, or cost cap).
-**Fix:** `openllama kill-switch status` to see the reason; then `openllama kill-switch deactivate` if appropriate.
+**Fix:** `opencli kill-switch status` to see the reason; then `opencli kill-switch deactivate` if appropriate.
 
 ### "approval denied / no approval channel is available" for L4/L5
 **Cause:** Running via `agent` loop — the agent cannot approve itself.
-**Fix:** Use `openllama exec <tool> --json '<args>'` from the terminal for interactive approval.
+**Fix:** Use `opencli exec <tool> --json '<args>'` from the terminal for interactive approval.
 
 ### "audit write failed; side effect NOT performed"
 **Cause:** SQLite ledger is locked, corrupt, or the directory is unwritable.
@@ -66,7 +69,7 @@ injection-detection count, consecutive-denial peak, per-tool counts.
 
 ### Reverse a specific mutation
 ```bash
-openllama audit rollback <event_id>
+opencli audit rollback <event_id>
 ```
 Supported: `write_file` (delete), `edit_file` (restore from snapshot).
 Unsupported: `run_shell`, `git` (instructions printed).
@@ -80,10 +83,10 @@ git show <commit>:<path> > <path>   # restore the version before the edit
 
 ### Inspect the audit ledger
 ```bash
-openllama audit show
-openllama audit verify
-openllama audit export --siem > events.jsonl
-openllama audit export --otel > events-otel.jsonl
+opencli audit show
+opencli audit verify
+opencli audit export --siem > events.jsonl
+opencli audit export --otel > events-otel.jsonl
 ```
 
 ## Rollback Steps
@@ -93,9 +96,9 @@ See [docs/rollback.md](rollback.md) for the full rollback plan per change type.
 ## Kill Switch
 
 ```bash
-openllama kill-switch status      # exits 1 if active
-openllama kill-switch activate    # halt all mutations
-openllama kill-switch deactivate  # re-enable mutations
+opencli kill-switch status      # exits 1 if active
+opencli kill-switch activate    # halt all mutations
+opencli kill-switch deactivate  # re-enable mutations
 ```
 
 Automated triggers (wired in the reasoning engine):
@@ -105,7 +108,7 @@ Automated triggers (wired in the reasoning engine):
 ## Data Repair
 
 If a mutation was applied but its audit event is corrupt:
-1. `openllama audit verify` — confirm the break.
+1. `opencli audit verify` — confirm the break.
 2. Do NOT attempt to fix the ledger manually (the chain will break).
 3. Note the break point (seq, event_id).
 4. Use git to determine the actual state of affected files.
@@ -114,9 +117,9 @@ If a mutation was applied but its audit event is corrupt:
 ## Security Checks
 
 On any suspicion of compromise:
-1. `openllama kill-switch activate --reason "security incident"`
-2. `openllama audit verify` — confirm chain is intact.
-3. `openllama audit export --siem` — pipe to Splunk / grep for anomalies.
+1. `opencli kill-switch activate --reason "security incident"`
+2. `opencli audit verify` — confirm chain is intact.
+3. `opencli audit export --siem` — pipe to Splunk / grep for anomalies.
 4. Review `policy_decision=DENY` events for injection attempts.
 
 ## Escalation

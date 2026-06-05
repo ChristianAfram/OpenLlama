@@ -1,4 +1,4 @@
-# Threat Model: OpenLlama Agent
+# Threat Model: OpenCLI Agent
 
 *Framework §16 — Master Plan §19 — v0.7 milestone*
 
@@ -15,7 +15,7 @@
 | Secrets / `.env` | Critical | Credential exposure, supply-chain compromise |
 | Kill-switch state | High | Stuck-active blocks all mutations; stuck-inactive allows unmonitored actions |
 | Snapshot store | Medium | Edit rollback becomes irrecoverable |
-| Policy bundle (`.rego` files) | High | Weakened enforcement enables unauthorized actions |
+| Policy bundle (`src/policy/rules/`) | High | Weakened enforcement enables unauthorized actions |
 | CI configuration (`.github/workflows/`) | High | Compromised CI could bypass gates or exfiltrate secrets |
 | Local model files | Medium | Replaced model could produce malicious tool calls |
 | Agent config | Low | Misconfiguration disrupts operation; no secret exposure |
@@ -143,7 +143,7 @@ instruction authority regardless of what it contains.
 |---|---|---|
 | Agent loop runs forever | Hard iteration cap (25 per task); consecutive-denial kill-switch trigger | ✓ Mitigated |
 | Repeated policy denials exhaust operator attention | Kill switch auto-activates after N consecutive denials (default 5) | ✓ Mitigated |
-| Snapshot store grows unbounded | No GC implemented in pre-alpha; documented as known limitation | Partial (no auto-GC) |
+| Snapshot store grows unbounded | No GC implemented in v0.7; documented as known limitation | Partial (no auto-GC) |
 | Injected tool call causes expensive shell command | All shell commands are L4 + require approval; kill switch available | ✓ Mitigated |
 
 ### Elevation of Privilege
@@ -174,7 +174,7 @@ instruction authority regardless of what it contains.
 | Malicious npm package installs and modifies policy files | `npm ci` + lockfile pinning; gitleaks secret scan; SBOM + dependency audit in CI | ✓ Mitigated |
 | Dependency vulnerability exploited at runtime | `npm audit --audit-level=high` in supply-chain CI gate | ✓ Mitigated |
 | Unvetted model registered in `catalog/models.yml` | Model governance (`model_governance.rego`); `--enterprise` refuses unregistered/unfailed models | ✓ Mitigated |
-| Model file replaced with malicious weights | Local filesystem; no automatic model update by OpenLlama; model hash tracking is a future item | Partial (no model file integrity check) |
+| Model file replaced with malicious weights | Local filesystem; no automatic model update by OpenCLI; model hash tracking is a future item | Partial (no model file integrity check) |
 
 ---
 
@@ -184,16 +184,16 @@ instruction authority regardless of what it contains.
 |---|---|---|
 | No-audit-no-action invariant | `executor.ts` — side effect blocked if audit write fails | ✓ (invariant tests) |
 | Trust-tier fencing | Untrusted content wrapped in `<untrusted_data>` fence in context | ✓ (injection evals) |
-| Secret-path denylist | `policies/secrets.rego`; applies before any read/write | ✓ (policy gate) |
-| Secret redaction | `kernel/audit.ts` — secrets stripped before ledger write | ✓ (secret-handling evals) |
-| Permission classifier | `kernel/classifier.ts` — deterministic; model can only raise level | ✓ (tool-permissions evals) |
-| Approval gate | `kernel/approval.ts` — L4 requires scoped, expiring grant | ✓ (approval-boundary evals) |
-| L5 confirmation phrase | `executor.ts` — hard confirmation required | ✓ (destructive-refusal evals) |
-| Policy-as-code | `kernel/policy-engine.ts` + OPA/WASM; ALLOW/DENY/REQUIRE | ✓ (policy gate) |
-| Independent verifier | `kernel/verifier.ts` — rule-based; BLOCK is terminal | ✓ (verifier tests) |
-| Kill switch | `kernel/kill-switch.ts` — persisted; auto-triggers on N denials | ✓ (kill-switch.yml) |
-| Hash-chained ledger | `kernel/audit.ts` — sha256(prev_hash + event) | ✓ (chain integrity tests) |
-| Rollback engine | `kernel/rollback.ts` — verifies hash preconditions | ✓ (rollback-correctness evals) |
+| Secret-path denylist | `src/policy/rules/` — applies before any read/write | ✓ (policy gate) |
+| Secret redaction | `src/kernel/audit.ts` — secrets stripped before ledger write | ✓ (secret-handling evals) |
+| Permission classifier | `src/kernel/classifier.ts` — deterministic; model can only raise level | ✓ (tool-permissions evals) |
+| Approval gate | `src/kernel/approval.ts` — L4 requires scoped, expiring grant | ✓ (approval-boundary evals) |
+| L5 confirmation phrase | `src/kernel/executor.ts` — hard confirmation required | ✓ (destructive-refusal evals) |
+| Policy-as-code | `src/policy/engine.ts`; ALLOW/DENY/REQUIRE | ✓ (policy gate) |
+| Independent verifier | `src/kernel/verifier.ts` — rule-based; BLOCK is terminal | ✓ (verifier tests) |
+| Kill switch | `src/kernel/kill-switch.ts` — persisted; auto-triggers on N denials | ✓ (kill-switch.yml) |
+| Hash-chained ledger | `src/kernel/audit.ts` — sha256(prev_hash + event) | ✓ (chain integrity tests) |
+| Rollback engine | `src/kernel/rollback.ts` — verifies hash preconditions | ✓ (rollback-correctness evals) |
 | SBOM + dependency audit | `npm run sbom`; `npm audit`; supply-chain.yml | ✓ (supply-chain.yml) |
 | Secret scanner | gitleaks in ci.yml | ✓ |
 | Exception lifecycle | `exception_gate.rego` — expires entries block CI | ✓ (policy.yml) |
@@ -204,8 +204,8 @@ instruction authority regardless of what it contains.
 
 | Risk | Accepted? | Exception / Compensating Control |
 |---|---|---|
-| No automatic GC for snapshot blobs | Yes (pre-alpha) | Manual cleanup documented in runbook; acceptable at local scale |
-| Kill-switch state file has no integrity check | Yes (pre-alpha) | File is simple JSON; read on every executor call; local-only attack surface |
+| No automatic GC for snapshot blobs | Yes (v0.7) | Manual cleanup documented in runbook; acceptable at local scale |
+| Kill-switch state file has no integrity check | Yes (v0.7) | File is simple JSON; read on every executor call; local-only attack surface |
 | Model file integrity not verified | Yes (v0.7) | Model files come from Ollama registry; user is responsible for pull source |
 | Live second-model verifier not yet deployed | Yes — EX-2026-001 (resolved at v0.5 via rule-based verifier) | Rule-based verifier covers High/Critical; human gate for L5 |
 | No signed release binaries for v0.7 public beta | Yes — EX-2026-002 | Releases are source-distributed via git; SBOM committed; signing infrastructure a v0.8 item |

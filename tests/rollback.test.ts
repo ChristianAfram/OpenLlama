@@ -235,7 +235,7 @@ describe("RollbackEngine — edge cases", () => {
 
       // Inject a fake run_shell executed event directly into the ledger.
       const { event_id } = ledger.appendEvent({
-        actor: "agent:openllama",
+        actor: "agent:opencli",
         service: "tool-executor",
         action: "run_shell",
         tool_name: "run_shell",

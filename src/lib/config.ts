@@ -1,13 +1,16 @@
 /**
- * Config and profiles for OpenLlama.
+ * Config and profiles for OpenCLI.
  *
  * Stored as JSON under `~/.config/openllama` (XDG-aware). A profile names the
  * model and Ollama host to use. Read helpers are pure and accept an explicit
  * directory so they can be unit-tested against a temp dir.
  *
+ * TODO(v0.8): migrate config dir from "openllama" to "opencli" with fallback
+ * so existing users are not silently broken. For v0.7 the legacy path is kept.
+ *
  * Environment overrides (highest precedence at resolve time):
  *   OLLAMA_HOST       -> profile.host
- *   OPENLLAMA_MODEL   -> profile.model
+ *   OPENLLAMA_MODEL   -> profile.model  (TODO v0.8: add OPENCLI_MODEL alias)
  */
 
 import { homedir } from "node:os";
@@ -20,7 +23,7 @@ export interface Profile {
   host: string;
 }
 
-export interface OpenLlamaConfig {
+export interface OpenCLIConfig {
   activeProfile: string;
   profiles: Record<string, Profile>;
 }
@@ -32,7 +35,7 @@ export const DEFAULT_PROFILE: Profile = {
   host: DEFAULT_OLLAMA_HOST,
 };
 
-export const DEFAULT_CONFIG: OpenLlamaConfig = {
+export const DEFAULT_CONFIG: OpenCLIConfig = {
   activeProfile: "default",
   profiles: { default: { ...DEFAULT_PROFILE } },
 };
@@ -49,13 +52,13 @@ export function configPath(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /** Load config from an explicit path, falling back to defaults if absent/invalid. */
-export function loadConfigFrom(path: string): OpenLlamaConfig {
+export function loadConfigFrom(path: string): OpenCLIConfig {
   if (!existsSync(path)) {
     return structuredClone(DEFAULT_CONFIG);
   }
   try {
     const raw = readFileSync(path, "utf8");
-    const parsed = JSON.parse(raw) as Partial<OpenLlamaConfig>;
+    const parsed = JSON.parse(raw) as Partial<OpenCLIConfig>;
     return normalizeConfig(parsed);
   } catch {
     return structuredClone(DEFAULT_CONFIG);
@@ -63,7 +66,7 @@ export function loadConfigFrom(path: string): OpenLlamaConfig {
 }
 
 /** Persist config to an explicit path, creating the directory if needed. */
-export function saveConfigTo(dir: string, config: OpenLlamaConfig): void {
+export function saveConfigTo(dir: string, config: OpenCLIConfig): void {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -71,7 +74,7 @@ export function saveConfigTo(dir: string, config: OpenLlamaConfig): void {
 }
 
 /** Load the config from the resolved user config path. */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): OpenLlamaConfig {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): OpenCLIConfig {
   return loadConfigFrom(configPath(env));
 }
 
@@ -80,7 +83,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OpenLlamaConfi
  * environment-variable overrides applied.
  */
 export function resolveProfile(
-  config: OpenLlamaConfig,
+  config: OpenCLIConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): Profile {
   const base = config.profiles[config.activeProfile] ?? DEFAULT_PROFILE;
@@ -90,7 +93,7 @@ export function resolveProfile(
   };
 }
 
-function normalizeConfig(parsed: Partial<OpenLlamaConfig>): OpenLlamaConfig {
+function normalizeConfig(parsed: Partial<OpenCLIConfig>): OpenCLIConfig {
   const profiles =
     parsed.profiles && typeof parsed.profiles === "object"
       ? parsed.profiles

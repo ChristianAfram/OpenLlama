@@ -1,5 +1,5 @@
 /**
- * `openllama audit` sub-commands.
+ * `opencli audit` sub-commands.
  *
  *   audit show                      – human-readable event timeline
  *   audit verify                    – walk the hash chain and report the first break
@@ -93,7 +93,7 @@ export function registerAuditCommand(program: Command): void {
       if (opts.otel) {
         // OTel-compatible LogRecord format (OTLP JSON schema, single resource).
         // Each audit event becomes one LogRecord; the resource identifies the
-        // openllama service. Consumers can forward this to Tempo/Grafana, Splunk
+        // opencli service. Consumers can forward this to Tempo/Grafana, Splunk
         // OTel, or any OTLP-compatible backend.
         for (const ev of events) {
           process.stdout.write(JSON.stringify(toOtelLogRecord(ev)) + "\n");
@@ -193,16 +193,16 @@ function toOtelLogRecord(ev: AuditEvent): unknown {
     severityText: ev.result === "executed" ? "INFO" : ev.result === "blocked" ? "WARN" : "ERROR",
     body: { stringValue: JSON.stringify(ev) },
     attributes: [
-      { key: "openllama.event_id", value: { stringValue: ev.event_id } },
-      { key: "openllama.action", value: { stringValue: ev.action } },
-      { key: "openllama.result", value: { stringValue: ev.result ?? "" } },
-      { key: "openllama.risk_level", value: { stringValue: ev.risk_level ?? "" } },
-      { key: "openllama.permission_level", value: { intValue: ev.permission_level ?? 0 } },
-      { key: "openllama.tool_name", value: { stringValue: ev.tool_name ?? "" } },
-      { key: "openllama.policy_decision", value: { stringValue: ev.policy_decision ?? "" } },
-      { key: "openllama.actor", value: { stringValue: ev.actor ?? "" } },
-      { key: "openllama.target", value: { stringValue: ev.target ?? "" } },
-      { key: "openllama.hash", value: { stringValue: ev.hash.slice(0, 16) } },
+      { key: "opencli.event_id", value: { stringValue: ev.event_id } },
+      { key: "opencli.action", value: { stringValue: ev.action } },
+      { key: "opencli.result", value: { stringValue: ev.result ?? "" } },
+      { key: "opencli.risk_level", value: { stringValue: ev.risk_level ?? "" } },
+      { key: "opencli.permission_level", value: { intValue: ev.permission_level ?? 0 } },
+      { key: "opencli.tool_name", value: { stringValue: ev.tool_name ?? "" } },
+      { key: "opencli.policy_decision", value: { stringValue: ev.policy_decision ?? "" } },
+      { key: "opencli.actor", value: { stringValue: ev.actor ?? "" } },
+      { key: "opencli.target", value: { stringValue: ev.target ?? "" } },
+      { key: "opencli.hash", value: { stringValue: ev.hash.slice(0, 16) } },
     ],
     traceId: ev.correlation_id?.replace(/-/g, "").slice(0, 32) ?? "",
     spanId: ev.event_id.replace(/-/g, "").slice(0, 16),

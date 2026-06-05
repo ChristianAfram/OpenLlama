@@ -40,7 +40,7 @@ Config file (`~/.config/openllama/config.json`) takes the same keys and is read 
 ## npm registry (planned — v0.8)
 
 ```bash
-npm install -g openllama   # not yet published
+npm install -g opencli   # not yet published
 ```
 
 The npm package will be published when binary signing infrastructure is in place (EX-2026-002). Until then, install from source.
@@ -59,7 +59,7 @@ node --version   # should be ≥ 18
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5-coder:7b
 
-# OpenLlama
+# OpenCLI
 git clone https://github.com/christianafram/openllama.git && cd openllama
 npm install && npm run build
 ```
@@ -109,7 +109,7 @@ Run with `node dist/index.js` (not `bun run dist/index.js`) until Bun's native a
 
 ## Single-file executable (future — v0.8+)
 
-The plan for frictionless distribution is a single-file executable via Node.js SEA (`node --experimental-sea-config`) or Bun's `bun build --compile`. The integrity-critical sliver (audit chain verification) may be packaged as a standalone binary. This is tracked as a v0.8 item; the goal is `brew install openllama` / `winget install openllama`.
+The plan for frictionless distribution is a single-file executable via Node.js SEA (`node --experimental-sea-config`) or Bun's `bun build --compile`. The integrity-critical sliver (audit chain verification) may be packaged as a standalone binary. This is tracked as a v0.8 item; the goal is `brew install opencli` / `winget install opencli`.
 
 ## Verifying the build
 

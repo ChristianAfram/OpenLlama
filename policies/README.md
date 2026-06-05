@@ -1,8 +1,8 @@
 # Policies
 
-This is the documented home of OpenLlama's policy bundle (Master Plan §8). The
+This is the documented home of OpenCLI's policy bundle (Master Plan §8). The
 **executable** bundle lives in [`src/policy/`](../src/policy) — it is implemented
-natively in TypeScript and runs **in-process**, so OpenLlama stays a single local
+natively in TypeScript and runs **in-process**, so OpenCLI stays a single local
 tool with no external policy server and no native build-time toolchain.
 
 > **Why native TS rather than committed `.rego`/WASM here?** The framework
@@ -33,6 +33,6 @@ Decisions aggregate **most-restrictive-wins**:
 ## Try it
 
 ```bash
-openllama policy test --json '{"tool":"git","permission_level":4,"git_branch":"main"}'
-openllama policy exceptions     # the §25 exception-lifecycle CI gate
+opencli policy test --json '{"tool":"git","permission_level":4,"git_branch":"main"}'
+opencli policy exceptions     # the §25 exception-lifecycle CI gate
 ```

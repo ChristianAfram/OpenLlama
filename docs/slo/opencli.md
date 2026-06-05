@@ -1,15 +1,15 @@
-# SLO: OpenLlama Agent
+# SLO: OpenCLI Agent
 
-*Framework §20 — Master Plan §14 — v0.6 milestone*
+*Framework §20 — Master Plan §14 — v0.7 public beta*
 
-**Status:** Pre-alpha, local-only. Formal SLOs are defined here for structure
-but not yet enforced by external monitoring. They become binding at v0.7.
+**Status:** Local-only deployment on an operator workstation. Formal SLOs are
+defined here and enforced structurally by the governance kernel and CI gates.
 
 ---
 
 ## Service
 
-`openllama` — local AI coding agent
+`opencli` — local AI coding CLI with governance-native audit invariant
 
 ## Owner
 
@@ -29,7 +29,7 @@ Project maintainer
 
 ---
 
-## SLOs (targets for v0.7)
+## SLOs (v0.7)
 
 | SLI | Target | Notes |
 |---|---|---|
@@ -46,16 +46,16 @@ Project maintainer
 
 ## Error Budget
 
-Not yet defined (pre-alpha, no production traffic).
+Not yet defined (local-only deployment; no production traffic).
 
 ---
 
 ## Dashboards
 
 ```bash
-openllama audit metrics          # agentic signals from the ledger
-openllama audit verify           # chain integrity check
-openllama eval                   # eval pass rates
+opencli audit metrics          # agentic signals from the ledger
+opencli audit verify           # chain integrity check
+opencli eval                   # eval pass rates
 ```
 
 ---

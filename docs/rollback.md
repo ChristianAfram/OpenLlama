@@ -1,4 +1,4 @@
-# Rollback Plan: OpenLlama Mutations
+# Rollback Plan: OpenCLI Mutations
 
 *Framework §49, §55 — Master Plan §13*
 
@@ -14,23 +14,23 @@ Initiate rollback when:
 
 ```bash
 # 1. Halt all further mutations immediately.
-openllama kill-switch activate --reason "<reason>"
+opencli kill-switch activate --reason "<reason>"
 
 # 2. Verify the audit chain is intact.
-openllama audit verify
+opencli audit verify
 ```
 
 ## Rollback Method
 
-OpenLlama records every mutation in a hash-chained audit ledger. The rollback
+OpenCLI records every mutation in a hash-chained audit ledger. The rollback
 engine consults the ledger and the snapshot store to reverse a specific event.
 
 ```bash
 # Show recent mutations.
-openllama audit show
+opencli audit show
 
 # Reverse a specific mutation by its audit event_id.
-openllama audit rollback <event_id> [--cwd <repo-root>]
+opencli audit rollback <event_id> [--cwd <repo-root>]
 ```
 
 ## Supported Rollbacks
@@ -52,10 +52,10 @@ openllama audit rollback <event_id> [--cwd <repo-root>]
 
 ```bash
 # View all events for a specific file or tool.
-openllama audit show | grep <path>
+opencli audit show | grep <path>
 
 # Rollback a write_file.
-openllama audit rollback <event_id>
+opencli audit rollback <event_id>
 
 # Rollback a git commit (manual).
 git reset --hard <before_sha>   # before_sha is in the audit event's rollback_path
@@ -76,10 +76,10 @@ actual files/git state, not the ledger.
 
 ## Config Rollback
 
-Kill switch state: `~/.config/openllama/kill-switch.json` — delete or
-`openllama kill-switch deactivate`.
+Kill switch state: `~/.config/openllama/kill-switch.json` (v0.7 legacy path) — delete or
+`opencli kill-switch deactivate`.
 
-Snapshot store: `~/.local/share/openllama/snapshots/` — blobs are content-
+Snapshot store: `~/.local/share/openllama/snapshots/` (v0.7 legacy path) — blobs are content-
 addressed and accumulate; no cleanup required unless disk is constrained.
 
 ## Prompt or Model Rollback
@@ -93,14 +93,14 @@ addressed and accumulate; no cleanup required unless disk is constrained.
 If a rollback leaves a file in an unexpected state:
 1. Check git blame / log for the file's history.
 2. `git show <commit>:<path>` to inspect any prior version.
-3. Restore the desired version manually, then run `openllama exec write_file` (or edit via editor) to re-record the change in the audit ledger.
+3. Restore the desired version manually, then run `opencli exec write_file` (or edit via editor) to re-record the change in the audit ledger.
 
 ## Verification
 
 After rollback:
 ```bash
-openllama audit verify     # chain must still be intact
-openllama audit show       # confirm rollback event is recorded
+opencli audit verify     # chain must still be intact
+opencli audit show       # confirm rollback event is recorded
 ```
 
 Confirm the file/directory state matches expectation:

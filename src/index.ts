@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
- * OpenLlama CLI entry point.
+ * OpenCLI CLI entry point.
  *
- * Registers commands against the commander program. Prompt 0 ships a single
- * read-only command (`chat`). The governance kernel and mutating tools are
- * added in subsequent prompts; nothing here can touch the world yet.
+ * Registers the public v0.7 command surface.
+ * Mutating operations are reachable only through kernel-gated commands such as
+ * agent and exec. The executor enforces the no-audit-no-action invariant before
+ * any side effect runs.
  */
 
 import { Command } from "commander";
+import { VERSION } from "./version.js";
 import { registerAgentCommand } from "./commands/agent.js";
 import { registerAuditCommand } from "./commands/audit.js";
 import { registerChatCommand } from "./commands/chat.js";
@@ -19,12 +21,12 @@ import { registerPolicyCommand } from "./commands/policy.js";
 const program = new Command();
 
 program
-  .name("openllama")
+  .name("opencli")
   .description(
-    "Local-first, governance-native AI coding agent. " +
+    "Local-first, governance-native AI coding CLI. " +
       "No tool that mutates the world runs unless an audit write succeeds first.",
   )
-  .version("0.1.0-pre.0");
+  .version(VERSION);
 
 registerAgentCommand(program);
 registerAuditCommand(program);

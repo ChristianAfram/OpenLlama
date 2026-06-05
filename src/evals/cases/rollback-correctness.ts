@@ -251,7 +251,7 @@ export const rollbackCorrectnessCases: EvalCase[] = [
       // rollback engine only needs the event to be present and result=executed).
       const { ledger } = makeKernel(ctx.repoRoot);
       const { event_id } = ledger.appendEvent({
-        actor: "agent:openllama",
+        actor: "agent:opencli",
         service: "tool-executor",
         action: "run_shell",
         tool_name: "run_shell",

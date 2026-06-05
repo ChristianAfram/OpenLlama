@@ -11,9 +11,9 @@
  *   - Audit-write failure
  *
  * Manual controls:
- *   openllama kill-switch status
- *   openllama kill-switch activate [--reason "..."]
- *   openllama kill-switch deactivate
+ *   opencli kill-switch status
+ *   opencli kill-switch activate [--reason "..."]
+ *   opencli kill-switch deactivate
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

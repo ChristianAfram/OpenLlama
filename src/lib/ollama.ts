@@ -6,7 +6,7 @@
  * implementation is injectable so the streaming/parse logic can be unit-tested
  * without a live server.
  *
- * Scope (Prompt 0): read-only conversation only. No tool calls, no side effects.
+ * Used by the `chat` command (read-only, no tool calls) and by the agent loop.
  */
 
 export interface ChatMessage {

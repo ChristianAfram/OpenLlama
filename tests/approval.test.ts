@@ -223,7 +223,7 @@ describe("verifyGrant: scope and expiry enforcement", () => {
     rollback_path: "git checkout src/auth/token.ts",
     reason: "implement refresh",
     session_id: "sess-1",
-    requested_by: "agent:openllama",
+    requested_by: "agent:opencli",
   };
 
   function goodGrant(over: Partial<ApprovalGrant> = {}): ApprovalGrant {
@@ -308,7 +308,7 @@ describe("verifyGrant: overbroad scopes are refused (no 'approve everything')", 
     rollback_path: "none",
     reason: "r",
     session_id: "s",
-    requested_by: "agent:openllama",
+    requested_by: "agent:opencli",
   };
   function grant(scope: Partial<ApprovalGrant["scope"]>): ApprovalGrant {
     const now = Date.now();
@@ -374,7 +374,7 @@ describe("requiredConfirmationPhrase", () => {
     data_changed: [],
     rollback_path: "restore from backup",
     reason: "r",
-    requested_by: "agent:openllama",
+    requested_by: "agent:opencli",
   };
 
   it("embeds the tool and target so it cannot be a generic 'yes'", () => {

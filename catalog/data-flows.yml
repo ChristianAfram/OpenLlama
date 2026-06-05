@@ -2,7 +2,7 @@
 #
 # Every important data flow must document source, destination, data
 # classification, sensitive content, external processors, and audit behavior.
-# Pre-alpha: all flows are LOCAL ONLY; no external processors.
+# All flows are LOCAL ONLY; no external processors.
 
 - flow: user-prompt-to-agent
   source: user (terminal stdin / CLI argument)
@@ -11,8 +11,8 @@
   contains_personal_data: false
   description: >-
     User's task description or chat prompt enters the reasoning engine.
-    Treated as trusted (user instruction tier). Never written to ledger verbatim
-    in pre-alpha; the task is visible in agent session logs.
+    Treated as trusted (user instruction tier). Never written to ledger verbatim;
+    the task is visible in agent session logs.
   retention: in-memory only; not persisted
   external_processors: []
   logs_raw_content: false
@@ -52,8 +52,8 @@
   approval_required_for_permanent_write: false
 
 - flow: executor-to-audit-ledger
-  source: executor (kernel/executor.ts)
-  destination: audit ledger (kernel/audit.ts → SQLite)
+  source: executor (src/kernel/executor.ts)
+  destination: audit ledger (src/kernel/audit.ts → SQLite)
   data_classification: internal
   contains_personal_data: maybe (file paths, diff summaries)
   description: >-
@@ -70,8 +70,8 @@
   notes: "audit events are the primary forensic record; integrity protected by sha256 hash chain"
 
 - flow: mutation-plan-to-snapshot-store
-  source: executor step 3d (kernel/executor.ts)
-  destination: snapshot store (kernel/snapshot.ts → filesystem)
+  source: executor step 3d (src/kernel/executor.ts)
+  destination: snapshot store (src/kernel/snapshot.ts → filesystem)
   data_classification: internal
   contains_personal_data: maybe (user source code — before-state of edited files)
   description: >-
@@ -92,11 +92,11 @@
   data_classification: internal
   contains_personal_data: maybe (file paths, diff summaries)
   description: >-
-    openllama audit export --siem emits all audit events as raw JSONL on stdout.
-    The operator pipes this to their SIEM. OpenLlama itself does not transmit
+    opencli audit export --siem emits all audit events as raw JSONL on stdout.
+    The operator pipes this to their SIEM. OpenCLI itself does not transmit
     data externally; the operator controls the destination.
   retention: operator-controlled once exported
-  external_processors: [operator-chosen SIEM — not controlled by OpenLlama]
+  external_processors: [operator-chosen SIEM — not controlled by OpenCLI]
   logs_raw_content: false
   deletion_path: operator-controlled
   approval_required_for_permanent_write: false
@@ -108,22 +108,22 @@
   data_classification: internal
   contains_personal_data: maybe (file paths in attributes)
   description: >-
-    openllama audit export --otel emits audit events as OTel LogRecord JSONL.
+    opencli audit export --otel emits audit events as OTel LogRecord JSONL.
     Body carries full audit event JSON; key fields promoted to attributes for
-    filtering. Operator routes to their OTLP backend; OpenLlama does not transmit.
+    filtering. Operator routes to their OTLP backend; OpenCLI does not transmit.
   retention: operator-controlled
-  external_processors: [operator-chosen OTLP backend — not controlled by OpenLlama]
+  external_processors: [operator-chosen OTLP backend — not controlled by OpenCLI]
   logs_raw_content: false
   deletion_path: operator-controlled
   approval_required_for_permanent_write: false
 
 - flow: policy-engine-evaluation
   source: executor (proposed action + context)
-  destination: OPA/WASM policy engine (kernel/policy-engine.ts)
+  destination: policy engine (src/policy/engine.ts)
   data_classification: internal
   contains_personal_data: false
   description: >-
-    Every proposed action is evaluated by the in-process OPA/WASM policy engine
+    Every proposed action is evaluated by the in-process policy engine
     before the approval gate. The engine receives the action, risk level,
     permission level, and context; it returns ALLOW / REQUIRE_APPROVAL /
     REQUIRE_CONFIRMATION / DENY with a reason code. All inputs and outputs are
@@ -142,10 +142,10 @@
   description: >-
     The reasoning engine sends conversation context to the local Ollama server
     and streams back the model response. All inference is local; no data leaves
-    the machine. The Ollama server is not controlled by OpenLlama; it is the
+    the machine. The Ollama server is not controlled by OpenCLI; it is the
     user's own locally running instance.
   retention: in-memory only during session; Ollama may retain context per its own config
-  external_processors: [Ollama local server — user-controlled, not OpenLlama]
+  external_processors: [Ollama local server — user-controlled, not OpenCLI]
   logs_raw_content: false
   deletion_path: per Ollama configuration
   approval_required_for_permanent_write: false

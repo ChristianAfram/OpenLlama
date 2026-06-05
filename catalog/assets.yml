@@ -2,7 +2,7 @@
 #
 # Every important asset must be tracked with owner, environment, data
 # classification, backup status, access controls, and known risks.
-# Pre-alpha: all assets are LOCAL ONLY.
+# All assets are LOCAL ONLY (local-only deployment; no cloud infrastructure).
 
 - asset: audit-ledger
   type: database
@@ -16,11 +16,11 @@
   backup: manual (export JSONL before destructive ops; see docs/rollback.md)
   restore_tested: false
   access:
-    - openllama-agent (kernel/audit.ts — append-only; UPDATE/DELETE blocked)
+    - opencli-agent (src/kernel/audit.ts — append-only; UPDATE/DELETE blocked)
   risks:
     - ledger corruption breaks the hash chain and blocks the kernel
     - SQLite file could be deleted; no automatic backup
-    - no remote/off-box replication in pre-alpha
+    - no remote/off-box replication at v0.7
   notes: "DELETE/UPDATE blocked at DB level via SQLITE_DBCONFIG_DEFENSIVE + triggers"
 
 - asset: snapshot-store
@@ -36,9 +36,9 @@
   backup: "blobs are recreatable from git history; losing them makes edit_file rollback irrecoverable"
   restore_tested: false
   access:
-    - openllama-agent (kernel/snapshot.ts — write on mutation plan, read on rollback)
+    - opencli-agent (src/kernel/snapshot.ts — write on mutation plan, read on rollback)
   risks:
-    - blobs can grow unbounded (no GC in pre-alpha)
+    - blobs can grow unbounded (no GC in v0.7)
     - if snapshots are deleted, edit_file rollback falls back to irrecoverable path with manual instructions
 
 - asset: kill-switch-state
@@ -50,13 +50,13 @@
     JSON state file tracking whether the global kill switch is active.
     Survives process restarts; read on every executor call when switch is active.
   path: "~/.config/openllama/kill-switch.json (OPENLLAMA_CONFIG_DIR override)"
-  backup: recreatable (openllama kill-switch deactivate resets state)
+  backup: recreatable (opencli kill-switch deactivate resets state)
   restore_tested: true
   access:
-    - openllama-agent (kernel/kill-switch.ts — read/write)
+    - opencli-agent (src/kernel/kill-switch.ts — read/write)
   risks:
     - stale activated state blocks all mutating tools after crash/restart
-    - mitigated by openllama kill-switch status and deactivate commands
+    - mitigated by opencli kill-switch status and deactivate commands
 
 - asset: agent-config
   type: filesystem
@@ -70,7 +70,7 @@
   backup: n/a (recreatable from defaults or .env.example)
   restore_tested: true
   access:
-    - openllama-agent (lib/config.ts — read on startup)
+    - opencli-agent (src/lib/config.ts — read on startup)
   risks:
     - misconfigured host/model causes connection errors; recoverable
 
@@ -80,18 +80,18 @@
   environment: local
   data_classification: internal
   description: >-
-    OPA/Rego policy bundle that governs all agent actions. Compiled to WASM
-    at build time; loaded in-process by the policy engine. Tampering with
-    policies (policies/*.rego) weakens the governance guarantees.
-  path: "policies/ (source); dist/ (compiled)"
+    TypeScript policy engine and rules that govern all agent actions. Evaluated
+    in-process by the policy engine. Tampering with policy source
+    (src/policy/rules/) weakens the governance guarantees.
+  path: "src/policy/ (source); dist/ (compiled)"
   backup: tracked in git; history is the backup
   restore_tested: true
   access:
-    - openllama-agent (kernel/policy-engine.ts — read-only at runtime)
+    - opencli-agent (src/policy/engine.ts — read-only at runtime)
     - CI (policy.yml — validates on every push)
   risks:
     - modified policy files could weaken enforcement; mitigated by CI policy gate
-    - exception_gate.rego enforced by CI — expired exception fails the build
+    - exception_gate enforced by CI — expired exception fails the build
 
 - asset: eval-suite
   type: filesystem

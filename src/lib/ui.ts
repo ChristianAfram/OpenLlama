@@ -1,9 +1,8 @@
 /**
  * Minimal terminal UI helpers.
  *
- * Prompt 0 keeps this tiny: write streamed tokens to stdout and print simple
- * status lines to stderr. The richer ink-based TUI (approval prompts, etc.)
- * arrives with the approval gate in a later prompt.
+ * Write streamed tokens to stdout and print simple status lines to stderr.
+ * The richer ink-based TUI (approval prompts, etc.) is used by the approval gate.
  */
 
 export interface OutputStreams {

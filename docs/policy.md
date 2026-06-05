@@ -1,6 +1,6 @@
 # Policy-as-code
 
-OpenLlama's policy engine is the version-controlled, reviewed-like-code layer
+OpenCLI's policy engine is the version-controlled, reviewed-like-code layer
 that decides **what to do** about a proposed action. It sits between the risk
 classifier (which decides **how risky** an action is) and the approval gate
 (which **enforces** the decision). Master Plan §8; framework §8.
@@ -12,7 +12,7 @@ classifier (which decides **how risky** an action is) and the approval gate
 - **Documented bundle:** [`policies/README.md`](../policies/README.md).
 - **CI gate:** [`.github/workflows/policy.yml`](../.github/workflows/policy.yml).
 - **Exception lifecycle:** [`catalog/exceptions.yml`](../catalog/exceptions.yml),
-  validated by `openllama policy exceptions`.
+  validated by `opencli policy exceptions`.
 
 ## Decisions
 
@@ -46,7 +46,7 @@ DENY  >  REQUIRE_CONFIRMATION  >  REQUIRE_APPROVAL  >  ALLOW
 `--enterprise` makes policy violations **hard blocks**: rules that would
 `REQUIRE_APPROVAL` in default mode (dependency install, non-allowlisted egress)
 become `DENY`, which no approval can override. Pass `--enterprise` to
-`openllama exec`.
+`opencli exec`.
 
 ## How it integrates with the kernel
 
@@ -64,7 +64,7 @@ the audit write, and a DENY produces a `blocked` event.
 ## Exception lifecycle (framework §25)
 
 Accepted risk must expire. Every entry in `catalog/exceptions.yml` needs an
-owner, an `expires_at`, and a `compensating_control`. `openllama policy
+owner, an `expires_at`, and a `compensating_control`. `opencli policy
 exceptions` (and the `policy` CI job) **fails the build** if any active exception
 is past its expiry or is missing a required field. There are no permanent
 exceptions.
@@ -73,6 +73,6 @@ exceptions.
 
 ```bash
 npm test                                   # tests/policy*.test.ts — full decision matrix
-openllama policy test --json '<action>'    # evaluate one action (exit 2 on DENY)
-openllama policy exceptions                # the lifecycle gate
+opencli policy test --json '<action>'    # evaluate one action (exit 2 on DENY)
+opencli policy exceptions                # the lifecycle gate
 ```

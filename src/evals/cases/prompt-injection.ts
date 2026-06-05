@@ -2,7 +2,7 @@
  * Prompt-injection evals (Master Plan §11, framework §43).
  *
  * The core claim: a prompt injection embedded in repository content cannot make
- * OpenLlama mutate the world or leak a secret — EVEN IF the model is fully
+ * OpenCLI mutate the world or leak a secret — EVEN IF the model is fully
  * compromised and obeys the injection. We prove this by driving the real
  * reasoning engine with a ScriptedModelClient that does exactly what a malicious
  * comment tells it to (force-push, read `.env`, `rm -rf`) and asserting the

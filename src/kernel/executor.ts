@@ -1,7 +1,7 @@
 /**
  * The tool executor — the ONLY component that touches the world.
  *
- * The defining invariant of OpenLlama lives here:
+ * The defining invariant of OpenCLI lives here:
  *
  *     A mutating action runs only after its audit write is confirmed.
  *     If the audit write fails, NO side effect is performed.
@@ -144,7 +144,7 @@ export class Executor {
     // The base audit fields carry the descriptor defaults; they are upgraded
     // after classification when the classifier raises the level.
     const base: AppendInput = {
-      actor: "agent:openllama",
+      actor: "agent:opencli",
       service: "tool-executor",
       action: tool.descriptor.name,
       tool_name: tool.descriptor.name,
@@ -412,7 +412,7 @@ export class Executor {
       rollback_path: planned.rollback_path,
       reason: auditBase.policy_reason ?? "elevated risk",
       ...(auditBase.session_id ? { session_id: auditBase.session_id } : {}),
-      requested_by: opts.requested_by ?? auditBase.actor ?? "agent:openllama",
+      requested_by: opts.requested_by ?? auditBase.actor ?? "agent:opencli",
     };
 
     let decision;
