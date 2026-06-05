@@ -20,7 +20,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "eval": "npm run build && node dist/index.js eval"
+    "eval": "npm run build && node dist/index.js eval",
+    "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
@@ -31,6 +32,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "^4.2.1",
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",

@@ -21,3 +21,48 @@
     requires a manual, action-specific confirmation phrase; the agent loop is
     given no approval channel, so it can never approve its own action.
   status: resolved
+
+- exception_id: EX-2026-002
+  risk: "No cryptographically signed release binaries for v0.7 public beta"
+  impact: >-
+    Users who download a binary release (once packaged) cannot verify its
+    integrity via a GPG or cosign signature. Source distribution via git is
+    safe (git commit hashes are verifiable); packaged binaries are not signed.
+  reason: >-
+    Binary signing infrastructure (GitHub Actions OIDC + cosign, or GPG key
+    management) is non-trivial to set up correctly and is a v0.8 item. Rushing
+    signing without a proper key lifecycle would be worse than no signing.
+  owner: chris
+  approved_by: chris
+  created_at: 2026-06-05
+  expires_at: 2027-01-01
+  compensating_control: >-
+    Releases are source-distributed via git (commit SHA is verifiable). A
+    CycloneDX SBOM (sbom.json) is committed to the repository and regenerated
+    in CI, giving users a verifiable inventory of all dependencies. The sbom.yml
+    CI gate validates the SBOM on every push.
+  status: active
+
+- exception_id: EX-2026-003
+  risk: "Live second-model verifier deferred to v0.8"
+  impact: >-
+    Critical-tier actions are verified by the rule-based verifier only, not
+    by a second live model instance. A single model making and reviewing its
+    own proposed actions has a correlated failure mode.
+  reason: >-
+    Running a second live model instance requires additional Ollama model
+    management, latency budget, and a well-defined disagreement protocol.
+    The rule-based verifier (kernel/verifier.ts) covers the structural safety
+    properties deterministically and is already enforced for High/Critical
+    actions. A live second model adds coverage for semantic correctness, not
+    structural safety. Structural safety is the v0.7 guarantee.
+  owner: chris
+  approved_by: chris
+  created_at: 2026-06-05
+  expires_at: 2027-01-01
+  compensating_control: >-
+    The rule-based verifier (kernel/verifier.ts) runs for every High and
+    Critical action; a BLOCK verdict is terminal and cannot be overridden by
+    any approval. L5 actions require a manual, action-specific confirmation
+    phrase from the operator. The agent loop is given no approval channel.
+  status: active

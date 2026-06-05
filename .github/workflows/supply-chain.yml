@@ -1,0 +1,105 @@
+name: supply-chain
+
+# Supply-chain security gates (Prompt 11 / framework §15, §34, Master Plan §16).
+#
+# Runs on every push and PR. Gates:
+#   1. npm audit --audit-level=high — fails if any high or critical CVE is present
+#      in the dependency tree (direct or transitive).
+#   2. License compliance — verifies that all direct runtime dependencies use
+#      permissive licenses (MIT, Apache-2.0, ISC, BSD-*). GPL and AGPL are blocked
+#      because they impose copyleft obligations on the distributed binary.
+#   3. Lockfile freshness — checks that package-lock.json is consistent with
+#      package.json (npm ci would fail if not, but this surfaces it explicitly).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  supply-chain:
+    name: supply-chain · audit · license · lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency vulnerability audit (high+)
+        run: npm audit --audit-level=high
+
+      - name: License compliance check (runtime deps)
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+
+          ALLOWED = {"MIT", "Apache-2.0", "ISC", "BSD-2-Clause", "BSD-3-Clause", "0BSD", "Unlicense", "CC0-1.0"}
+          BLOCKED_PREFIXES = ("GPL", "AGPL", "LGPL", "SSPL", "BUSL", "Commons Clause")
+
+          with open("package.json") as f:
+              pkg = json.load(f)
+
+          # Check direct runtime deps only (dev deps are not distributed)
+          runtime_deps = set(pkg.get("dependencies", {}).keys())
+
+          with open("package-lock.json") as f:
+              lock = json.load(f)
+
+          packages = lock.get("packages", {})
+          issues = []
+
+          for dep in runtime_deps:
+              key = f"node_modules/{dep}"
+              meta = packages.get(key, {})
+              license_id = meta.get("license", "UNKNOWN")
+              if not license_id or license_id == "UNKNOWN":
+                  issues.append(f"  {dep}: no license info in lockfile")
+                  continue
+              if license_id not in ALLOWED:
+                  for blocked in BLOCKED_PREFIXES:
+                      if license_id.startswith(blocked):
+                          issues.append(f"  {dep}: blocked license {license_id}")
+                          break
+                  else:
+                      # Not in allowed set but not explicitly blocked — warn
+                      print(f"WARNING: {dep} has unlisted license {license_id} — review required")
+
+          if issues:
+              print("License compliance FAILED:")
+              for i in issues:
+                  print(i)
+              sys.exit(1)
+          else:
+              print(f"License compliance OK: {len(runtime_deps)} runtime deps checked")
+          EOF
+
+      - name: Lockfile consistency check
+        run: |
+          # npm ci itself enforces lockfile consistency; this step makes the check
+          # explicit and visible in the job summary.
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const pkgDeps = Object.keys({...pkg.dependencies, ...pkg.devDependencies}).sort();
+          let missing = [];
+          for (const dep of pkgDeps) {
+            if (!lock.packages['node_modules/' + dep]) {
+              missing.push(dep);
+            }
+          }
+          if (missing.length > 0) {
+            console.error('Missing from lockfile:', missing.join(', '));
+            process.exit(1);
+          }
+          console.log('Lockfile consistent: all', pkgDeps.length, 'declared deps are present');
+          "

@@ -2,7 +2,7 @@
 
 **Local-first, governance-native, open-source AI coding agent.**
 
-> Status: **pre-alpha** (v0.6 — "Observable and recoverable"). Not for production use.
+> Status: **public beta** (v0.7 — "Public beta"). Local-only. See [`docs/production-readiness.md`](docs/production-readiness.md) for the CONDITIONAL GO decision.
 
 ## The thesis
 
@@ -24,9 +24,9 @@ everything it did.
 ## What works today
 
 The governance kernel, the full Level 0–5 tool surface, the deterministic AI
-eval suite, the policy-as-code engine, the v0.5 safety layer, and the v0.6
-observability + rollback layer are in place. Built and tested across
-milestones v0.1–v0.6:
+eval suite, the policy-as-code engine, the v0.5 safety layer, the v0.6
+observability + rollback layer, and the v0.7 supply-chain + public-beta docs
+are in place. Built and tested across milestones v0.1–v0.7:
 
 - **Hash-chained audit ledger** — every action is recorded in an append-only
   SQLite ledger; `hash = sha256(prev_hash + canonical_json(body))`. UPDATE/DELETE
@@ -100,6 +100,17 @@ milestones v0.1–v0.6:
 - **Runbook + DR notes** — [`docs/runbook.md`](docs/runbook.md),
   [`docs/rollback.md`](docs/rollback.md), [`docs/disaster-recovery.md`](docs/disaster-recovery.md).
   Restore procedures documented; drills noted as tested or not-yet-drilled (§19).
+- **Supply-chain gates** — CycloneDX SBOM (`sbom.json`) committed and regenerated
+  in CI; `npm audit` vulnerability gate; license compliance check; gitleaks secret
+  scan; Dependabot updates. See [`SECURITY.md`](SECURITY.md).
+- **Full catalog** — `catalog/assets.yml`, `catalog/data-flows.yml`,
+  `catalog/services.yml`, `catalog/models.yml`, `catalog/exceptions.yml`.
+  Every production asset tracked; every data flow documented.
+- **Threat model** — [`docs/threat-models/openllama.md`](docs/threat-models/openllama.md):
+  full STRIDE + AI threat analysis; residual risks; accepted exceptions with expiry.
+- **Production-readiness review** — [`docs/production-readiness.md`](docs/production-readiness.md):
+  §51 scorecard (no 0s; Security/Data/Deployment/Observability/AI-safety/Policy all ≥2);
+  §57 full review; decision: **CONDITIONAL GO** for public beta.
 
 ### Commands
 
@@ -164,5 +175,4 @@ npm run build       # tsup -> dist/
 
 ## License
 
-[MIT](LICENSE) — *provisional*. The license and project name are revisited
-before any public launch (see Master Plan §23).
+[MIT](LICENSE)
