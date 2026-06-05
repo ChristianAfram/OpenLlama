@@ -26,6 +26,11 @@ export function info(message: string, streams: OutputStreams = defaultStreams): 
   streams.err.write(`${message}\n`);
 }
 
+/** Print a warning line to stderr. */
+export function warn(message: string, streams: OutputStreams = defaultStreams): void {
+  streams.err.write(`warn: ${message}\n`);
+}
+
 /** Print an error line to stderr. */
 export function error(message: string, streams: OutputStreams = defaultStreams): void {
   streams.err.write(`error: ${message}\n`);

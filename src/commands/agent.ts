@@ -7,20 +7,23 @@
  * (inspect with `openllama audit show`).
  */
 
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { Command } from "commander";
 import { loadConfig, resolveProfile } from "../lib/config.js";
 import { OllamaError } from "../lib/ollama.js";
-import { error, info } from "../lib/ui.js";
+import { error, info, warn } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
 import { OllamaModelClient } from "../reasoning/model-client.js";
 import { ReasoningEngine } from "../reasoning/engine.js";
+import { loadModelCatalog, checkModelGovernance } from "../lib/model-governance.js";
+import { RuleBasedVerifier } from "../kernel/verifier.js";
 
 interface AgentOptions {
   model?: string;
   host?: string;
   cwd?: string;
   maxIterations?: string;
+  enterprise?: boolean;
 }
 
 export function registerAgentCommand(program: Command): void {
@@ -34,12 +37,29 @@ export function registerAgentCommand(program: Command): void {
     .option("--host <url>", "override the Ollama host")
     .option("--cwd <dir>", "repository root to operate in (default: current dir)")
     .option("--max-iterations <n>", "hard cap on reasoning iterations", "25")
+    .option("--enterprise", "enterprise hard-block mode (model must be registered and evaluated)")
     .action(async (questionParts: string[], options: AgentOptions) => {
       const question = questionParts.join(" ").trim();
       const profile = resolveProfile(loadConfig());
       const model = options.model ?? profile.model;
       const host = options.host ?? profile.host;
       const repoRoot = resolve(options.cwd ?? process.cwd());
+      const enterprise = options.enterprise ?? false;
+
+      // Model governance check (Prompt 9 — framework §22, Master Plan §11).
+      const catalogPath = join(repoRoot, "catalog/models.yml");
+      const catalog = loadModelCatalog(catalogPath);
+      const governance = checkModelGovernance(model, catalog, enterprise);
+      if (!governance.allowed) {
+        error(`model governance: ${governance.reason}`);
+        process.exitCode = 1;
+        return;
+      }
+      if (!governance.in_catalog) {
+        warn(`model governance: ${governance.reason}`);
+      } else if (!governance.evaluated) {
+        warn(`model governance: ${governance.reason}`);
+      }
 
       const registry = buildDefaultRegistry();
       const client = OllamaModelClient.fromHost(model, host);
@@ -48,6 +68,8 @@ export function registerAgentCommand(program: Command): void {
         model: client,
         toolContext: { repoRoot },
         maxIterations: Number(options.maxIterations),
+        verifier: new RuleBasedVerifier(),
+        model_eval_passed: governance.eval_passed,
       });
 
       try {

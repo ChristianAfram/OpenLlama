@@ -146,7 +146,8 @@ export function levelToRisk(level: PermissionLevel): RiskLevel {
  * All comparisons are case-insensitive. Entries with trailing spaces prevent
  * matching within longer identifiers (e.g. "truncated" ≠ "truncate ").
  */
-const DESTRUCTIVE_TOKENS: readonly string[] = [
+/** Exported for use by the independent verifier (defense-in-depth). */
+export const DESTRUCTIVE_TOKENS: readonly string[] = [
   "rm -rf",
   "rm -r ",
   "rm -fr",
@@ -182,8 +183,8 @@ function findDestructiveToken(text: string): string | null {
   return null;
 }
 
-/** Path fragments that identify protected/secret targets (case-insensitive). */
-const PROTECTED_TARGET_FRAGMENTS: readonly string[] = [
+/** Path fragments that identify protected/secret targets (case-insensitive). Exported for verifier. */
+export const PROTECTED_TARGET_FRAGMENTS: readonly string[] = [
   ".env",
   ".git/config",
   ".git/hooks",
@@ -219,8 +220,8 @@ function isProtectedTarget(target: string): boolean {
   });
 }
 
-/** Branch name patterns that are always protected — pushes require L5. */
-const PROTECTED_BRANCH_PATTERNS: readonly RegExp[] = [
+/** Branch name patterns that are always protected — pushes require L5. Exported for verifier. */
+export const PROTECTED_BRANCH_PATTERNS: readonly RegExp[] = [
   /^main$/i,
   /^master$/i,
   /^production$/i,

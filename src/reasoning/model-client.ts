@@ -22,6 +22,8 @@ export interface ModelToolCall {
 export interface ModelTurn {
   content: string;
   tool_calls: ModelToolCall[];
+  /** Token usage from the model — populated when the backend provides it. */
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 /** A tool definition handed to the model (name + JSON-schema parameters). */

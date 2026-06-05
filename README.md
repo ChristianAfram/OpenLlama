@@ -2,7 +2,7 @@
 
 **Local-first, governance-native, open-source AI coding agent.**
 
-> Status: **pre-alpha** (v0.4 — "Policy-as-code"). Not for production use.
+> Status: **pre-alpha** (v0.5 — "Second pair of eyes"). Not for production use.
 
 ## The thesis
 
@@ -24,8 +24,9 @@ everything it did.
 ## What works today
 
 The governance kernel, the full Level 0–5 tool surface, the deterministic AI
-eval suite, and the policy-as-code engine are in place. Built and tested across
-milestones v0.1–v0.4:
+eval suite, the policy-as-code engine, and the v0.5 safety layer (verifier +
+kill switch + model governance) are in place. Built and tested across
+milestones v0.1–v0.5:
 
 - **Hash-chained audit ledger** — every action is recorded in an append-only
   SQLite ledger; `hash = sha256(prev_hash + canonical_json(body))`. UPDATE/DELETE
@@ -70,6 +71,20 @@ milestones v0.1–v0.4:
   tool-permissions, approval-boundary, json-tool-args. Prompt-injection and
   destructive-refusal are hard **100%** release gates, enforced in CI. See
   [`evals/README.md`](evals/README.md).
+- **Independent verifier** — a second, rule-based reviewer that runs after
+  policy evaluation for High/Critical actions. A BLOCK verdict is terminal —
+  no approval can override it. Defense in depth against destructive commands,
+  secret-path writes, and protected-branch pushes. The verifier interface is
+  stable; a live second-model instance is a future milestone.
+- **Kill switch** — global halt that blocks every mutating tool immediately,
+  persisted to disk and survives process restarts. Automated triggers: N
+  consecutive policy denials in a session (default 5), or a token-cap breach.
+  Manual control: `openllama kill-switch [status|activate|deactivate]`.
+  Verified in CI (`kill-switch.yml`).
+- **Model governance** — `catalog/models.yml` registers every allowed model.
+  In enterprise mode (`--enterprise`), the agent refuses to start with an
+  unregistered or unevaluated model. The `model_governance` policy rule denies
+  all actions when `model_eval_passed = false`.
 
 ### Commands
 
@@ -80,6 +95,9 @@ openllama exec  <tool> --json '<args>'  # run one tool through the kernel (no mo
 openllama eval                        # run the AI eval suite + enforce the gates
 openllama policy test --json '<action>' # evaluate an action against the policy bundle
 openllama policy exceptions           # validate the exception catalog (CI gate)
+openllama kill-switch status          # show kill-switch state
+openllama kill-switch activate        # halt all mutating tools
+openllama kill-switch deactivate      # re-enable mutating tools
 openllama audit show                  # human-readable event timeline
 openllama audit verify                # check the hash chain is intact
 openllama audit export [--siem]       # JSONL export for a SIEM

@@ -10,11 +10,14 @@
  * `MutatingTool` whose `plan()` computes the change (and its before/after blob
  * hashes) WITHOUT side effects; the executor then:
  *
+ *   0. kill-switch check               — if active, all mutations are blocked
  *   1. validates args (zod)            — invalid → logged "blocked", no effect
  *   2. plans the mutation              — refusal (e.g. overwrite) → "blocked"
  *   2b. enforces descriptor denylist   — denied path → "blocked"
  *   3. classifies it (deterministic classifier, Prompt 4)
- *   3b. approval gate (Prompt 5)       — L4/L5 need a scoped grant (+ L5 phrase);
+ *   3a. policy evaluation (Prompt 8)   — DENY → blocked; else → may need approval
+ *   3b. verifier check (Prompt 9)      — second-opinion for H/C actions; BLOCK → denied
+ *   3c. approval gate (Prompt 5)       — L4/L5 need a scoped grant (+ L5 phrase);
  *                                         no/denied/invalid grant → "blocked"
  *   4. APPENDS THE AUDIT EVENT         — if this throws, we stop here, no effect
  *   5. applies the side effect         — only now does the world change
@@ -39,6 +42,8 @@ import {
 import { getDefaultPolicyEngine, type PolicyEngine } from "../policy/engine.js";
 import type { PolicyInput } from "../policy/types.js";
 import { isSecretPath } from "../lib/redaction.js";
+import type { KillSwitch } from "./kill-switch.js";
+import type { Verifier } from "./verifier.js";
 
 export class ExecutorError extends Error {
   override name = "ExecutorError";
@@ -70,6 +75,22 @@ export interface ExecuteOptions {
    * (e.g. dependency install / non-allowlisted egress become DENY).
    */
   enterprise?: boolean;
+  /**
+   * Kill switch (Prompt 9). If provided and active, every mutation is blocked
+   * before arg validation — nothing gets through.
+   */
+  killSwitch?: KillSwitch;
+  /**
+   * Independent verifier (Prompt 9). If provided, called for High/Critical
+   * actions after policy evaluation but before the approval gate. A BLOCK
+   * verdict is terminal — no approval can rescue it.
+   */
+  verifier?: Verifier;
+  /**
+   * Whether the driving model has passed its eval suite (from model governance
+   * at startup). Threaded into PolicyInput so model_governance rule fires.
+   */
+  model_eval_passed?: boolean;
 }
 
 // (classifyStub removed — Prompt 4 wires in the real deterministic classifier)
@@ -96,6 +117,15 @@ export class Executor {
     rawArgs: unknown,
     opts: ExecuteOptions,
   ): Promise<ExecuteOutcome> {
+    // 0. Kill switch — if active, block ALL mutations immediately.
+    //    This is checked before anything else (including arg validation) so a
+    //    kill-switch activation is a hard stop with no side effects.
+    if (opts.killSwitch?.isActive()) {
+      const ks = opts.killSwitch.getState();
+      const reason = `kill switch is active (triggered_by: ${ks.triggered_by}): ${ks.reason}`;
+      return { status: "blocked", event_id: "", reason };
+    }
+
     const ledger = this.ledger(opts);
 
     // Every execution has a concrete session id: approval grants are bound to a
@@ -191,6 +221,11 @@ export class Executor {
       secret_path: planned.target !== undefined ? isSecretPath(planned.target) : false,
       audit_available: true,
       enterprise: opts.enterprise ?? false,
+      // Model governance (Prompt 9): set by the startup check in agent/exec.
+      // When undefined, the model_governance policy rule is not triggered.
+      ...(opts.model_eval_passed !== undefined
+        ? { model_eval_passed: opts.model_eval_passed }
+        : {}),
     };
     const policy = this.policy.evaluate(policyInput);
 
@@ -218,6 +253,40 @@ export class Executor {
       const event_id = this.tryLogBlocked(ledger, auditBase, reason);
       return { status: "blocked", event_id, reason };
     }
+
+    // 3c. Independent verifier (Prompt 9). Runs for High/Critical risk actions
+    //     after the policy non-DENY decision. A BLOCK is terminal.
+    if (
+      opts.verifier &&
+      (classifiedRisk === "high" || classifiedRisk === "critical")
+    ) {
+      const verifierAction = {
+        tool: tool.descriptor.name,
+        permission_level: classification.level,
+        risk_level: classifiedRisk,
+        target: planned.target,
+        command:
+          typeof parsedArgs["command"] === "string" ? parsedArgs["command"] : undefined,
+        git_branch:
+          typeof parsedArgs["git_branch"] === "string"
+            ? parsedArgs["git_branch"]
+            : typeof parsedArgs["branch"] === "string"
+              ? (parsedArgs["branch"] as string)
+              : undefined,
+        summary: planned.summary,
+      };
+      const verdict = await opts.verifier.verify(verifierAction);
+      if (verdict.verdict === "BLOCK") {
+        const reason = `verifier blocked (${verdict.verifier_id}): ${verdict.reason}`;
+        const event_id = this.tryLogBlocked(
+          ledger,
+          { ...auditBase, policy_reason: reason },
+          reason,
+        );
+        return { status: "blocked", event_id, reason };
+      }
+    }
+
     if (policy.decision === "REQUIRE_APPROVAL" || policy.decision === "REQUIRE_CONFIRMATION") {
       const gate = await this.runApprovalGate(
         ledger,
