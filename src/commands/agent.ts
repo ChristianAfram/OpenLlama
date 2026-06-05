@@ -9,7 +9,7 @@
 
 import { join, resolve } from "node:path";
 import { Command } from "commander";
-import { loadConfig, resolveProfile } from "../lib/config.js";
+import { loadLayeredConfig, effectiveProfile } from "../lib/config-scopes.js";
 import { OllamaError } from "../lib/ollama.js";
 import { error, info, warn } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
@@ -18,6 +18,8 @@ import { ReasoningEngine } from "../reasoning/engine.js";
 import { loadModelCatalog, checkModelGovernance } from "../lib/model-governance.js";
 import { RuleBasedVerifier } from "../kernel/verifier.js";
 import { getDefaultSnapshotStore } from "../kernel/snapshot.js";
+import { getDefaultLedger } from "../kernel/audit.js";
+import { PROMPT_VERSION } from "../reasoning/context.js";
 
 interface AgentOptions {
   model?: string;
@@ -41,11 +43,52 @@ export function registerAgentCommand(program: Command): void {
     .option("--enterprise", "enterprise hard-block mode (model must be registered and evaluated)")
     .action(async (questionParts: string[], options: AgentOptions) => {
       const question = questionParts.join(" ").trim();
-      const profile = resolveProfile(loadConfig());
+      const repoRoot = resolve(options.cwd ?? process.cwd());
+
+      // Layered, governed config: builtin < user < project < env < flag.
+      // The `--enterprise` flag may only TIGHTEN; a project file can never
+      // loosen a security control a lower scope established (Config Scopes, v0.8).
+      const merged = loadLayeredConfig({
+        cwd: repoRoot,
+        flags: { enterprise: options.enterprise },
+      });
+      const profile = effectiveProfile(merged.effective);
       const model = options.model ?? profile.model;
       const host = options.host ?? profile.host;
-      const repoRoot = resolve(options.cwd ?? process.cwd());
-      const enterprise = options.enterprise ?? false;
+      const enterprise = merged.effective.security.enterprise;
+
+      // Surface any loosening attempts that the merge dropped.
+      for (const r of merged.rejections) {
+        warn(`config: ignored ${r.scope} scope override of ${r.field} — ${r.reason}`);
+      }
+
+      // Record the effective security posture on the audit timeline (L0, informational).
+      // Non-fatal: config logging does not gate world mutations, so a ledger
+      // failure here warns rather than aborts.
+      try {
+        getDefaultLedger().appendEvent({
+          actor: "user",
+          service: "opencli-agent",
+          action: "effective_config",
+          input_source: "developer",
+          target: repoRoot,
+          model,
+          prompt_version: PROMPT_VERSION,
+          result: "executed",
+          data_read: [
+            {
+              enterprise,
+              enterprise_origin: merged.origins["security.enterprise"] ?? "builtin",
+              denied_paths: merged.effective.security.denied_paths,
+              context_budget: merged.effective.context.budget,
+              compaction: merged.effective.context.compaction,
+              rejected_overrides: merged.rejections.map((r) => `${r.scope}:${r.field}`),
+            },
+          ],
+        });
+      } catch (e) {
+        warn(`config: could not record effective_config audit event: ${String(e)}`);
+      }
 
       // Model governance check (Prompt 9 — framework §22, Master Plan §11).
       const catalogPath = join(repoRoot, "catalog/models.yml");

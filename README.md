@@ -190,11 +190,41 @@ node dist/index.js exec write_file --json '{"path":"hello.txt","content":"hi\n"}
 node dist/index.js audit verify
 ```
 
-Configuration lives in `~/.config/openllama/config.json` (v0.7 uses legacy path;
-migrates to `~/.config/opencli/` in v0.8). Override the model and host per-run
-with `--model` / `--host`, or via the `OPENLLAMA_MODEL` and `OLLAMA_HOST`
-environment variables (see `.env.example`). The audit ledger path can be
-overridden with `OPENLLAMA_AUDIT_DB`.
+### Configuration (layered scopes)
+
+Configuration is resolved from up to five scopes, in increasing precedence:
+
+```
+builtin  <  user  <  project  <  env  <  flag
+```
+
+- **user** — `~/.config/openllama/config.json` (legacy path; the XDG dir
+  migrates to `opencli` in a later v0.8 increment).
+- **project** — `.opencli/config.yaml` at (or above) the working directory.
+- **env** — `OPENCLI_MODEL` / `OPENCLI_HOST` (legacy `OPENLLAMA_MODEL` /
+  `OLLAMA_HOST` still honored), `OPENCLI_ENTERPRISE`.
+- **flag** — per-run `--model`, `--host`, `--enterprise`.
+
+The `[security]` group is **governed**: a higher-precedence scope may only
+*tighten* a control, never *loosen* it. A checked-in `.opencli/config.yaml` can
+raise the security posture (enable `enterprise`, add `denied_paths`) but can
+never disable enterprise mode or remove a denied path that the user scope set.
+Loosening attempts are dropped and recorded as a `effective_config` audit event
+(`opencli audit show`). See [`docs/config-scopes.md`](docs/config-scopes.md).
+
+Example `.opencli/config.yaml`:
+
+```yaml
+security:
+  enterprise: true          # tighten only — cannot be turned off downstream
+  denied_paths:
+    - "infra/**"
+context:
+  budget: 24000
+  compaction: structural
+```
+
+The audit ledger path can be overridden with `OPENLLAMA_AUDIT_DB`.
 
 ## Development
 
