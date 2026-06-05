@@ -20,6 +20,24 @@
   approval_required_for_permanent_write: false
   notes: "user instruction tier — highest trust; fenced from external content"
 
+- flow: project-config-to-effective-config
+  source: filesystem (.opencli/config.yaml, walked up from cwd)
+  destination: layered config resolver (src/lib/config-scopes.ts)
+  data_classification: internal
+  contains_personal_data: false
+  description: >-
+    A checked-in project config file contributes to effective configuration.
+    The `[security]` group is governed: a project scope may only TIGHTEN a
+    control (enable enterprise, add denied_paths), never loosen one a lower
+    scope set. Loosening attempts are dropped and recorded. Unknown/ill-typed
+    keys are coerced away. The file is data, not instructions.
+  retention: read per invocation; effective posture logged as effective_config audit event
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: process exit
+  approval_required_for_permanent_write: false
+  notes: "tighten-only merge; untrusted authorship (anyone who can open a PR)"
+
 - flow: external-content-to-context
   source: filesystem (read_file, list_dir, grep), tool output
   destination: reasoning engine context window
