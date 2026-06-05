@@ -1,0 +1,152 @@
+# Data flows (framework §17, Master Plan §20).
+#
+# Every important data flow must document source, destination, data
+# classification, sensitive content, external processors, and audit behavior.
+# Pre-alpha: all flows are LOCAL ONLY; no external processors.
+
+- flow: user-prompt-to-agent
+  source: user (terminal stdin / CLI argument)
+  destination: reasoning engine (src/reasoning/engine.ts)
+  data_classification: internal
+  contains_personal_data: false
+  description: >-
+    User's task description or chat prompt enters the reasoning engine.
+    Treated as trusted (user instruction tier). Never written to ledger verbatim
+    in pre-alpha; the task is visible in agent session logs.
+  retention: in-memory only; not persisted
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: process exit
+  approval_required_for_permanent_write: false
+  notes: "user instruction tier — highest trust; fenced from external content"
+
+- flow: external-content-to-context
+  source: filesystem (read_file, list_dir, grep), tool output
+  destination: reasoning engine context window
+  data_classification: internal
+  contains_personal_data: maybe (user's own codebase)
+  description: >-
+    Repository files, tool outputs, and grep results enter the model context.
+    Treated as UNTRUSTED DATA — fenced and never promoted to instruction authority.
+    Any instruction-like text in external content is inert.
+  retention: in-memory only; not persisted beyond the agent session
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: process exit
+  approval_required_for_permanent_write: false
+  notes: "untrusted content tier — prompt-injection defense (§43); evals verify this property"
+
+- flow: tool-call-to-executor
+  source: reasoning engine (parsed tool call)
+  destination: executor (src/kernel/executor.ts)
+  data_classification: internal
+  contains_personal_data: false
+  description: >-
+    Structured tool call (name + validated arguments) flows from the reasoning
+    engine to the executor. Zod-validated against the tool schema before reaching
+    the policy engine. No raw model output reaches the executor.
+  retention: in-memory only
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: process exit
+  approval_required_for_permanent_write: false
+
+- flow: executor-to-audit-ledger
+  source: executor (kernel/executor.ts)
+  destination: audit ledger (kernel/audit.ts → SQLite)
+  data_classification: internal
+  contains_personal_data: maybe (file paths, diff summaries)
+  description: >-
+    Before every mutating side effect, the executor writes a structured audit
+    event to the hash-chained ledger. The write must succeed; if it fails the
+    side effect does not run (no-audit-no-action invariant). Secrets are
+    redacted before storage — the ledger records that a secret was touched plus
+    a SHA-256 of the value, never the plaintext.
+  retention: append-only; indefinite (user-controlled; export + delete is the only removal path)
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: "export JSONL backup, then delete the SQLite file (breaks chain; documented in runbook)"
+  approval_required_for_permanent_write: false
+  notes: "audit events are the primary forensic record; integrity protected by sha256 hash chain"
+
+- flow: mutation-plan-to-snapshot-store
+  source: executor step 3d (kernel/executor.ts)
+  destination: snapshot store (kernel/snapshot.ts → filesystem)
+  data_classification: internal
+  contains_personal_data: maybe (user source code — before-state of edited files)
+  description: >-
+    Before every edit_file mutation, the executor captures the before-state as
+    a content-addressed blob in the snapshot store. The blob is keyed by its
+    sha256 hash and matched to the before_hash in the audit event, enabling
+    one-command rollback. Written before the audit event; if the capture fails,
+    the mutation is blocked.
+  retention: indefinite until user deletes snapshot directory
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: manual removal of ~/.local/share/openllama/snapshots/ (makes edit_file rollback irrecoverable)
+  approval_required_for_permanent_write: false
+
+- flow: audit-ledger-to-siem-export
+  source: audit ledger (SQLite)
+  destination: stdout (JSONL) → external SIEM (Splunk, Elastic, etc.)
+  data_classification: internal
+  contains_personal_data: maybe (file paths, diff summaries)
+  description: >-
+    openllama audit export --siem emits all audit events as raw JSONL on stdout.
+    The operator pipes this to their SIEM. OpenLlama itself does not transmit
+    data externally; the operator controls the destination.
+  retention: operator-controlled once exported
+  external_processors: [operator-chosen SIEM — not controlled by OpenLlama]
+  logs_raw_content: false
+  deletion_path: operator-controlled
+  approval_required_for_permanent_write: false
+  notes: "exported events contain redacted secret fields; no plaintext secrets leave the ledger"
+
+- flow: audit-ledger-to-otel-export
+  source: audit ledger (SQLite)
+  destination: stdout (JSONL) → OTel-compatible backend (Grafana Tempo, Splunk OTel, etc.)
+  data_classification: internal
+  contains_personal_data: maybe (file paths in attributes)
+  description: >-
+    openllama audit export --otel emits audit events as OTel LogRecord JSONL.
+    Body carries full audit event JSON; key fields promoted to attributes for
+    filtering. Operator routes to their OTLP backend; OpenLlama does not transmit.
+  retention: operator-controlled
+  external_processors: [operator-chosen OTLP backend — not controlled by OpenLlama]
+  logs_raw_content: false
+  deletion_path: operator-controlled
+  approval_required_for_permanent_write: false
+
+- flow: policy-engine-evaluation
+  source: executor (proposed action + context)
+  destination: OPA/WASM policy engine (kernel/policy-engine.ts)
+  data_classification: internal
+  contains_personal_data: false
+  description: >-
+    Every proposed action is evaluated by the in-process OPA/WASM policy engine
+    before the approval gate. The engine receives the action, risk level,
+    permission level, and context; it returns ALLOW / REQUIRE_APPROVAL /
+    REQUIRE_CONFIRMATION / DENY with a reason code. All inputs and outputs are
+    local; no network call.
+  retention: in-memory only
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: process exit
+  approval_required_for_permanent_write: false
+
+- flow: model-inference-local
+  source: reasoning engine (src/reasoning/engine.ts)
+  destination: local Ollama model server (localhost:11434)
+  data_classification: internal
+  contains_personal_data: maybe (user's codebase content in context window)
+  description: >-
+    The reasoning engine sends conversation context to the local Ollama server
+    and streams back the model response. All inference is local; no data leaves
+    the machine. The Ollama server is not controlled by OpenLlama; it is the
+    user's own locally running instance.
+  retention: in-memory only during session; Ollama may retain context per its own config
+  external_processors: [Ollama local server — user-controlled, not OpenLlama]
+  logs_raw_content: false
+  deletion_path: per Ollama configuration
+  approval_required_for_permanent_write: false
+  notes: "data stays on the local machine; hybrid/cloud mode (future v0.8) would require a separate data-flow entry and additional controls"
