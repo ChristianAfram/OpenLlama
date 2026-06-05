@@ -2,7 +2,7 @@
 
 **Local-first, governance-native, open-source AI coding agent.**
 
-> Status: **pre-alpha** (v0.3 — "It can't be tricked by the repo"). Not for production use.
+> Status: **pre-alpha** (v0.4 — "Policy-as-code"). Not for production use.
 
 ## The thesis
 
@@ -23,8 +23,9 @@ everything it did.
 
 ## What works today
 
-The governance kernel, the full Level 0–5 tool surface, and the deterministic
-AI eval suite are in place. Built and tested across milestones v0.1–v0.3:
+The governance kernel, the full Level 0–5 tool surface, the deterministic AI
+eval suite, and the policy-as-code engine are in place. Built and tested across
+milestones v0.1–v0.4:
 
 - **Hash-chained audit ledger** — every action is recorded in an append-only
   SQLite ledger; `hash = sha256(prev_hash + canonical_json(body))`. UPDATE/DELETE
@@ -45,6 +46,15 @@ AI eval suite are in place. Built and tested across milestones v0.1–v0.3:
   grant; Level 5 additionally requires a manual, action-specific confirmation
   phrase. Overbroad ("approve everything") grants are refused. The agent is given
   no approval channel, so it can never approve its own action.
+- **Policy-as-code** — a deterministic, in-process policy engine sits between the
+  classifier and the approval gate and maps every action to a decision
+  (`ALLOW` / `REQUIRE_APPROVAL` / `REQUIRE_CONFIRMATION` / `DENY`, most-restrictive
+  wins) with a reason code written to the ledger. Rules cover permission levels,
+  secret paths, repo-root containment, git (protected-branch/force-push),
+  dependency installs, network egress, and model governance. `--enterprise` mode
+  makes violations hard blocks. The **exception lifecycle** is CI-enforced:
+  an expired or malformed entry in `catalog/exceptions.yml` fails the build. See
+  [`docs/policy.md`](docs/policy.md).
 - **Reasoning loop** — an agent loop against a local
   [Ollama](https://ollama.com) model, with a hard iteration cap and a
   self-repair budget for invalid tool calls. External content (file contents,
@@ -68,6 +78,8 @@ openllama chat  "<prompt>"            # read-only conversation with a local mode
 openllama agent "<task>"              # the audited agent loop (read + draft + L3 write)
 openllama exec  <tool> --json '<args>'  # run one tool through the kernel (no model)
 openllama eval                        # run the AI eval suite + enforce the gates
+openllama policy test --json '<action>' # evaluate an action against the policy bundle
+openllama policy exceptions           # validate the exception catalog (CI gate)
 openllama audit show                  # human-readable event timeline
 openllama audit verify                # check the hash chain is intact
 openllama audit export [--siem]       # JSONL export for a SIEM
@@ -76,8 +88,8 @@ openllama audit export [--siem]       # JSONL export for a SIEM
 See [`docs/demo.md`](docs/demo.md) for the 90-second thesis demo (write a file →
 show the ledger → tamper with it → watch the chain break).
 
-The remaining milestones (independent verifier, policy-as-code, kill switch,
-SIEM/OTel export, rollback engine) are tracked in
+The remaining milestones (independent verifier, kill switch, SIEM/OTel export,
+rollback engine) are tracked in
 [`docs/OpenLlama-Master-Plan.md`](docs/OpenLlama-Master-Plan.md).
 [`CLAUDE.md`](CLAUDE.md) is the production-readiness framework that governs every
 change.
