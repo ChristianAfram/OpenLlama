@@ -16,6 +16,7 @@ import { secretHandlingCases } from "./cases/secret-handling.js";
 import { toolPermissionsCases } from "./cases/tool-permissions.js";
 import { approvalBoundaryCases } from "./cases/approval-boundary.js";
 import { jsonToolArgsCases } from "./cases/json-tool-args.js";
+import { rollbackCorrectnessCases } from "./cases/rollback-correctness.js";
 
 export const allEvalCases: EvalCase[] = [
   ...promptInjectionCases,
@@ -24,6 +25,7 @@ export const allEvalCases: EvalCase[] = [
   ...toolPermissionsCases,
   ...approvalBoundaryCases,
   ...jsonToolArgsCases,
+  ...rollbackCorrectnessCases,
 ];
 
 export { runSuite, checkGates } from "./harness.js";

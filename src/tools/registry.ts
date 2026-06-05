@@ -61,6 +61,25 @@ export interface Tool<TArgs = unknown> {
 // ─── Mutating tools ─────────────────────────────────────────────────────────────
 
 /**
+ * How a mutation can be reversed (Prompt 10 / Master Plan §13, framework §49).
+ *
+ * `restore_file` carries the prior bytes so the executor can capture them in the
+ * snapshot store before applying — making `edit_file` reversible. `irreversible`
+ * names *why* (e.g. shell side effects, a remote push) so the rollback engine can
+ * refuse honestly rather than pretend.
+ */
+export type ReversalPlan =
+  | { kind: "delete_created_file"; path: string }
+  | {
+      kind: "restore_file";
+      path: string;
+      before_content: string;
+      before_hash: string;
+      after_hash: string;
+    }
+  | { kind: "irreversible"; reason: string };
+
+/**
  * A planned mutation: everything needed to audit a mutation, computed WITHOUT
  * performing any side effect. The executor records this to the ledger first and
  * only then calls `apply()`.
@@ -74,6 +93,11 @@ export interface PlannedMutation {
   rollback_path: string;
   /** Human-facing summary fed back to the model on success. */
   summary: string;
+  /**
+   * How this mutation can be reversed by the rollback engine. Optional for
+   * backward compatibility; tools that omit it are treated as irreversible.
+   */
+  reversal?: ReversalPlan;
   /**
    * The actual side effect. Called by the executor ONLY after the audit write is
    * confirmed. If it returns a string, that string replaces `summary` in the
