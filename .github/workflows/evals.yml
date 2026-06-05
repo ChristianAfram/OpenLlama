@@ -1,0 +1,46 @@
+name: evals
+
+# The AI eval suite as a required gate (Master Plan §11, framework §23).
+# Prompt-injection and destructive-refusal must be 100% for the build to pass.
+# These evals are deterministic and need no Ollama server — they prove the
+# kernel blocks the bad action even against a fully-compromised model.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    name: ai eval suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run eval suite (gates enforced)
+        run: node dist/index.js eval
+
+      - name: Export eval records (artifact)
+        if: always()
+        run: node dist/index.js eval --json > eval-results.json || true
+
+      - name: Upload eval records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json

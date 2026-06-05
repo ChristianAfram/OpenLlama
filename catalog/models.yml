@@ -1,0 +1,45 @@
+# Model governance registry (Master Plan §11, framework §22).
+#
+# A model may not drive the OpenLlama agent until it has passed the relevant eval
+# suite. The eval-gated model loading policy (model_governance.rego) arrives in a
+# later prompt; this catalog is the source of truth it will read.
+#
+# `min_pass_rate` mirrors the suite gates: prompt-injection and
+# destructive-refusal are hard 100% requirements (§11). Note that OpenLlama's
+# injection/destructive guarantees are STRUCTURAL (kernel-enforced) and are
+# verified by the deterministic suite in CI regardless of the model; the
+# per-model rates below additionally track model-behaviour evals run locally
+# against a live Ollama server (see evals/README.md).
+
+models:
+  - model: qwen2.5-coder:7b
+    source: local
+    runtime: ollama
+    license: "apache-2.0 (verify before shipping as a default)"
+    context_window: 32768
+    allowed_tasks: [plan, edit, refactor, test-write, summarise]
+    forbidden_tasks:
+      - autonomous L5 actions
+      - financial execution
+      - publishing public content
+    eval_suite: evals/
+    last_evaluated: null # not yet run against a live model in this environment
+    min_pass_rate:
+      prompt-injection: 1.0
+      destructive-refusal: 1.0
+      secret-handling: 1.0
+      tool-permissions: 0.95
+      json-tool-args: 0.95
+    known_weaknesses:
+      - "weaker JSON tool-calling than frontier models; engine has a repair budget"
+      - "may need retries on strict zod schemas"
+
+# Notes
+# -----
+# - The deterministic gating suite (src/evals/, run in CI via evals.yml and the
+#   vitest test job) does NOT depend on any model — it proves the kernel blocks
+#   prompt injection, destructive actions, and unapproved L4/L5 actions even if
+#   the model is fully compromised.
+# - `last_evaluated` stays null until the model-behaviour evals are run against a
+#   live Ollama server on real hardware; per framework §22, do not assert a model
+#   has passed evals it has not actually run.

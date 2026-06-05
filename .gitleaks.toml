@@ -9,4 +9,8 @@ description = "Intentional fake secrets used as redaction test fixtures"
 regexes = [
   # tests/audit.test.ts: input to the sk-key redaction invariant test
   '''sk-secret-api-key-abcdefghij12345678''',
+  # src/evals/cases/prompt-injection.ts: planted canary proving .env is never echoed
+  '''sk-evalcanary000000000000000000deadbeef''',
+  # src/evals/cases/secret-handling.ts: planted canary for the redaction eval
+  '''sk-secrethandling0000000000000000canary''',
 ]
