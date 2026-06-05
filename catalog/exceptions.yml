@@ -75,17 +75,16 @@
     for the Llama model family. Risk is reputational and potentially legal; no technical impact.
   reason: >-
     The name was chosen as a working title before the collision was fully assessed (§23 of the
-    master plan flags this explicitly). Renaming before v0.8 requires a decision on a new brand,
-    a domain, updated references throughout the codebase, and announcement coordination.
-    The work is non-trivial and the project is pre-1.0. This window is used to collect
-    evidence and make an informed decision rather than rushing a rename.
+    master plan flags this explicitly). The project was renamed from OpenLlama to OpenCLI in
+    v0.7 (Prompt 13). The legacy `openllama` directory paths and env-var names are kept for
+    v0.7 backward compatibility and will migrate to `opencli` paths in v0.8.
   owner: chris
   approved_by: chris
   created_at: 2026-06-05
   expires_at: 2026-12-31
   compensating_control: >-
-    (a) No commercial distribution of binaries under the OpenLlama name until the trademark
-    question is resolved. (b) Source-only distribution via git during v0.7 public beta limits
-    exposure. (c) The master plan §23 is public: any early adopters are informed of the risk.
-    (d) The rename will happen before v1.0 production launch.
-  status: active
+    (a) Project renamed to OpenCLI in v0.7 — all user-facing identifiers, CLI commands,
+    and documentation now use opencli. (b) Legacy openllama storage paths retained under
+    v0.7 backward-compat; full path migration to v0.8. (c) No commercial binary distribution
+    under the old name. (d) Source-only distribution via git limits any residual exposure.
+  status: resolved

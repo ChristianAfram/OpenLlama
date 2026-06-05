@@ -8,7 +8,7 @@
 
 ## Governance model
 
-OpenLlama follows a **Benevolent Dictator For Now** (BDFN) model while the project is pre-1.0. The lead maintainer holds final merge authority and release sign-off.
+OpenCLI follows a **Benevolent Dictator For Now** (BDFN) model while the project is pre-1.0. The lead maintainer holds final merge authority and release sign-off.
 
 As the contributor base grows and the project reaches v1.0, governance will transition toward a **lazy consensus / RFC process**: significant changes are proposed as issues, a review window of at least 7 days applies, and silence is consent. Vetoes must be substantive (technical or security) and argued in writing.
 

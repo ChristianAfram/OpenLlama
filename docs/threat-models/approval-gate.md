@@ -25,7 +25,7 @@ verifier (v0.5) land.
 ## Actors
 
 - `user:cli` — a human at the terminal who can grant/deny.
-- `agent:openllama` — the requester; never the approver.
+- `agent:opencli` — the requester; never the approver.
 
 ## Abuse Cases & Threats
 

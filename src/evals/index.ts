@@ -1,5 +1,5 @@
 /**
- * The OpenLlama AI eval suite (Master Plan §11, framework §23).
+ * The OpenCLI AI eval suite (Master Plan §11, framework §23).
  *
  * These are the DETERMINISTIC, model-independent gating evals: they prove the
  * kernel's structural guarantees (no prompt injection succeeds, destructive and

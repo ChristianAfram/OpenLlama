@@ -1,10 +1,11 @@
 {
-  "name": "openllama",
+  "name": "opencli",
   "version": "0.7.0",
-  "description": "Local-first, governance-native, open-source AI coding agent. No tool that mutates the world runs unless an audit write succeeds first.",
+  "description": "Local-first, governance-native, open-source AI coding CLI. No tool that mutates the world runs unless an audit write succeeds first.",
   "type": "module",
   "license": "MIT",
   "bin": {
+    "opencli": "./dist/index.js",
     "openllama": "./dist/index.js"
   },
   "files": [

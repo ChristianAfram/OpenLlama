@@ -1,11 +1,13 @@
-# Disaster Recovery: OpenLlama
+# Disaster Recovery: OpenCLI
 
-*Framework §19 — Master Plan §14 — v0.6 milestone*
+*Framework §19 — Master Plan §14 — v0.7 public beta*
 
 **Scope:** local-only deployment on an operator workstation. No cloud infra,
-no shared database, no production service yet. This document covers the minimal
-DR posture for the pre-alpha milestone. A production DR plan is required before
-v0.7 (public beta).
+no shared database, no production service. This document covers the DR posture
+for the v0.7 public beta milestone.
+
+> **Note (v0.7):** Storage paths currently use the legacy `openllama` directory name
+> for backward compatibility. Migration to `opencli` paths is planned for v0.8.
 
 ---
 
@@ -27,9 +29,9 @@ v0.7 (public beta).
 - No automated backup at this milestone.
 - For compliance use cases, export before destructive operations:
   ```bash
-  openllama audit export --siem > audit-backup-$(date +%Y%m%d).jsonl
+  opencli audit export --siem > audit-backup-$(date +%Y%m%d).jsonl
   ```
-- *Restore not tested (pre-alpha).* JSONL export is the off-system copy.
+- *Restore not tested.* JSONL export is the off-system copy.
 
 **Snapshot store** (`~/.local/share/openllama/snapshots/`):
 - Content-addressed blobs; identical content → identical file name.
@@ -49,7 +51,7 @@ v0.7 (public beta).
 
 ```bash
 # Detect:
-openllama audit verify
+opencli audit verify
 # → prints seq of first broken link
 
 # Recover:
@@ -78,7 +80,7 @@ cp /tmp/before.txt ~/.local/share/openllama/snapshots/<sha256-hex>
 ### 3. Kill switch stuck active
 
 ```bash
-openllama kill-switch deactivate
+opencli kill-switch deactivate
 # or:
 rm ~/.config/openllama/kill-switch.json
 ```
@@ -89,10 +91,10 @@ rm ~/.config/openllama/kill-switch.json
 
 ```bash
 # Find the event:
-openllama audit show | grep <path>
+opencli audit show | grep <path>
 
 # Roll back if snapshot exists:
-openllama audit rollback <event_id>
+opencli audit rollback <event_id>
 
 # Or restore from git:
 git checkout HEAD -- <path>
@@ -115,8 +117,6 @@ ollama pull <model-name>
 
 ## Disaster Recovery Drills
 
-The following must be drilled before v0.7 (public beta):
-
 | Drill | Description | Status |
 |---|---|---|
 | Kill switch | Status/activate/deactivate lifecycle | ✓ Verified in CI |
@@ -130,24 +130,24 @@ The following must be drilled before v0.7 (public beta):
 
 ---
 
-## Known Gaps (Pre-Alpha)
+## Known Gaps (v0.7)
 
-| Gap | Risk | Compensating control | Exception |
+| Gap | Risk | Compensating control | Plan |
 |---|---|---|---|
-| No automated ledger backup | Data loss if SQLite file is deleted | JSONL export before operations | Accept until v0.7 |
-| Ledger JSONL re-import not implemented | Cannot restore chain after db loss | Off-machine export is the record | Accept until v0.7 |
-| Snapshot store not backed up | Lost snapshots = unrecoverable edits | Git history is the fallback | Accept until v0.7 |
-| No alerting for chain break | Break may go unnoticed | `audit verify` in post-session scripts | Accept until v0.7 |
+| No automated ledger backup | Data loss if SQLite file is deleted | JSONL export before operations | v0.8 |
+| Ledger JSONL re-import not implemented | Cannot restore chain after db loss | Off-machine export is the record | v0.8 |
+| Snapshot store not backed up | Lost snapshots = unrecoverable edits | Git history is the fallback | v0.8 |
+| No alerting for chain break | Break may go unnoticed | `audit verify` in post-session scripts | v0.8 |
 
 ---
 
 ## Incident Response Path
 
-1. Halt mutations: `openllama kill-switch activate --reason "<incident>"`
-2. Verify chain: `openllama audit verify`
-3. Export evidence: `openllama audit export --siem > evidence-$(date +%Y%m%d-%H%M%S).jsonl`
-4. Inspect recent events: `openllama audit show -n 50`
-5. Review metrics: `openllama audit metrics`
+1. Halt mutations: `opencli kill-switch activate --reason "<incident>"`
+2. Verify chain: `opencli audit verify`
+3. Export evidence: `opencli audit export --siem > evidence-$(date +%Y%m%d-%H%M%S).jsonl`
+4. Inspect recent events: `opencli audit show -n 50`
+5. Review metrics: `opencli audit metrics`
 6. Identify affected files; reverse with `audit rollback` or git
 7. Document in `catalog/exceptions.yml` if residual risk is accepted
-8. Deactivate kill switch when safe: `openllama kill-switch deactivate`
+8. Deactivate kill switch when safe: `opencli kill-switch deactivate`

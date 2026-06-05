@@ -1,6 +1,6 @@
 # Security Policy
 
-*v0.7 public beta — OpenLlama*
+*v0.7 public beta — OpenCLI*
 
 ---
 
@@ -11,7 +11,7 @@
 | v0.7.x (main) | ✓ Active | Yes |
 | v0.6.x and earlier | Archived | Critical only, best-effort |
 
-OpenLlama is a **local-only** agent in public beta. There is no hosted service,
+OpenCLI is a **local-only** agent in public beta. There is no hosted service,
 no cloud backend, and no network-accessible endpoint. The attack surface is
 limited to the local machine and the user's own repository.
 
@@ -49,10 +49,10 @@ time to ship a fix; for lower-severity issues, disclosure timing is negotiated.
 
 **In scope (please report):**
 
-- The OpenLlama governance kernel (`src/kernel/`)
+- The OpenCLI governance kernel (`src/kernel/`)
 - The approval gate and permission model (`src/kernel/approval.ts`, `src/kernel/executor.ts`)
 - The audit ledger and hash chain (`src/kernel/audit.ts`)
-- The policy engine and policy bundle (`src/kernel/policy-engine.ts`, `policies/`)
+- The policy engine and policy rules (`src/policy/engine.ts`, `src/policy/rules/`)
 - The kill switch (`src/kernel/kill-switch.ts`)
 - The eval suite as a safety control (`src/evals/`)
 - The rollback engine (`src/kernel/rollback.ts`)
@@ -68,13 +68,13 @@ time to ship a fix; for lower-severity issues, disclosure timing is negotiated.
 - The local Ollama runtime and model weights — report to [Ollama](https://github.com/ollama/ollama)
 - Issues requiring physical access to the user's machine (that's between you and your OS)
 - Speculative or theoretical issues with no demonstrated impact
-- Issues in transitive dependencies not exploitable through OpenLlama
+- Issues in transitive dependencies not exploitable through OpenCLI
 
 ---
 
 ## Threat Model
 
-The comprehensive threat model is in [`docs/threat-models/openllama.md`](docs/threat-models/openllama.md).
+The comprehensive threat model is in [`docs/threat-models/opencli.md`](docs/threat-models/opencli.md).
 
 The core invariants that protect the system:
 
@@ -101,7 +101,7 @@ The core invariants that protect the system:
    manual, action-specific confirmation phrase typed by the operator. The agent
    loop is given no approval channel; it cannot approve its own actions.
 
-6. **Kill switch** — a single `openllama kill-switch activate` freezes all
+6. **Kill switch** — a single `opencli kill-switch activate` freezes all
    mutating tools immediately, survives process restart, and is auto-triggered
    by N consecutive policy denials (default 5).
 
@@ -115,11 +115,15 @@ The core invariants that protect the system:
 - **Local-only.** Hybrid/cloud mode is not yet implemented. All inference and
   storage is on the user's machine.
 - **No model file integrity verification.** The user is responsible for pulling
-  models from a trusted Ollama registry. OpenLlama does not verify `.gguf`
+  models from a trusted Ollama registry. OpenCLI does not verify `.gguf`
   file hashes against a known-good manifest.
 - **Snapshot blob GC.** The snapshot store has no automated garbage collection
   in v0.7. Growth is bounded by the number of `edit_file` mutations in a
   session.
+- **Legacy storage paths.** In v0.7, config and data are stored under
+  `~/.config/openllama/` and `~/.local/share/openllama/` (the legacy name).
+  Migration to `opencli` paths is planned for v0.8. See
+  `catalog/exceptions.yml` (EX-2026-004) and `docs/runbook.md`.
 
 ---
 

@@ -201,7 +201,7 @@ export async function dispatchTool(
 
   const ledger = opts.ledger ?? getDefaultLedger();
   const base: AppendInput = {
-    actor: "agent:openllama",
+    actor: "agent:opencli",
     service: "tool-dispatcher",
     action: name,
     tool_name: name,

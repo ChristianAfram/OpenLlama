@@ -1,6 +1,6 @@
-# Contributing to OpenLlama
+# Contributing to OpenCLI
 
-Thank you for your interest in contributing. OpenLlama is a governance-native project — the standards we apply to the agent apply to contributions too.
+Thank you for your interest in contributing. OpenCLI is a governance-native project — the standards we apply to the agent apply to contributions too.
 
 ## Before you start
 

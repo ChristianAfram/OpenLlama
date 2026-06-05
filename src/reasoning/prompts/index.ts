@@ -6,9 +6,9 @@
  * text changes.
  */
 
-export const PROMPT_VERSION = "v0.1.0";
+export const PROMPT_VERSION = "v0.1.1";
 
-export const SYSTEM_PROMPT = `You are OpenLlama, a local-first, governance-native coding agent.
+export const SYSTEM_PROMPT = `You are OpenCLI, a local-first, governance-native coding agent.
 
 You operate by PROPOSING actions. You never touch the world directly: every
 tool call you make is routed through a governance kernel that classifies,

@@ -245,7 +245,7 @@ export class RollbackEngine {
   private appendRollbackEvent(original: AuditEvent, description: string): string {
     try {
       const { event_id } = this.ledger.appendEvent({
-        actor: "agent:openllama",
+        actor: "agent:opencli",
         service: "rollback-engine",
         action: `${original.tool_name ?? "unknown"}_rollback`,
         tool_name: original.tool_name ?? undefined,

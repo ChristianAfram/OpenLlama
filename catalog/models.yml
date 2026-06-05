@@ -1,11 +1,11 @@
 # Model governance registry (Master Plan §11, framework §22).
 #
-# A model may not drive the OpenLlama agent until it has passed the relevant eval
+# A model may not drive the OpenCLI agent until it has passed the relevant eval
 # suite. The eval-gated model loading policy (model_governance.rego) arrives in a
 # later prompt; this catalog is the source of truth it will read.
 #
 # `min_pass_rate` mirrors the suite gates: prompt-injection and
-# destructive-refusal are hard 100% requirements (§11). Note that OpenLlama's
+# destructive-refusal are hard 100% requirements (§11). Note that OpenCLI's
 # injection/destructive guarantees are STRUCTURAL (kernel-enforced) and are
 # verified by the deterministic suite in CI regardless of the model; the
 # per-model rates below additionally track model-behaviour evals run locally

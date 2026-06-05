@@ -1,5 +1,5 @@
 /**
- * `openllama eval` — run the deterministic AI eval suite and enforce the gates.
+ * `opencli eval` — run the deterministic AI eval suite and enforce the gates.
  *
  * Exit code 1 if any category falls below its pass-rate gate (Master Plan §11:
  * prompt-injection and destructive-refusal must be 100%). `--json` prints the

@@ -1,11 +1,9 @@
 /**
- * `openllama chat` — read-only conversation with a local model.
+ * `opencli chat` — read-only conversation with a local model.
  *
- * Scope (Prompt 0): a single-turn, read-only exchange. It sends the user's
- * prompt to Ollama and streams the response. There are NO tools, NO filesystem
- * writes, and NO side effects of any kind here. The governance kernel (audit
- * ledger, executor, classifier, approvals) and any mutating tools arrive in
- * later prompts; until then this command is purely the Level 0 surface.
+ * Read-only, no-tools surface. Sends the user's prompt to a local Ollama model
+ * and streams the response. The governance kernel and mutating tools are used
+ * via the `agent` and `exec` commands; this command is purely the Level 0 surface.
  */
 
 import { Command } from "commander";
@@ -19,7 +17,7 @@ interface ChatOptions {
 }
 
 const SYSTEM_PROMPT =
-  "You are OpenLlama, a local, read-only assistant. In this mode you cannot " +
+  "You are OpenCLI, a local, read-only assistant. In this mode you cannot " +
   "modify files, run commands, or take any action — you can only answer.";
 
 async function readStdin(): Promise<string> {
@@ -61,7 +59,7 @@ export function registerChatCommand(program: Command): void {
       ];
 
       try {
-        info(`openllama: ${model} @ ${host} (read-only)`);
+        info(`opencli: ${model} @ ${host} (read-only)`);
         for await (const fragment of client.chatStream({ model, messages })) {
           writeToken(fragment);
         }

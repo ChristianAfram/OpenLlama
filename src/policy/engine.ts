@@ -8,7 +8,7 @@
  * Implementation note. The Master Plan's preferred production form is an
  * OPA/WASM bundle compiled from /policies/*.rego. This engine is the in-process
  * evaluator of the SAME documented policy, implemented natively in TypeScript so
- * OpenLlama stays a single local tool with no external policy server and no
+ * OpenCLI stays a single local tool with no external policy server and no
  * native build-time toolchain (framework §15: prefer a small, maintainable local
  * implementation over a fragile dependency). The rule set, decisions, and reason
  * codes are the source of truth; docs/policy.md is the human-readable bundle.
@@ -38,7 +38,7 @@ export const DEFAULT_BUNDLE: readonly PolicyRule[] = [
 ];
 
 /** A stable identifier for the bundle version (bump on rule changes). */
-export const POLICY_BUNDLE_VERSION = "openllama-policy-v1";
+export const POLICY_BUNDLE_VERSION = "opencli-policy-v1";
 
 export class PolicyEngine {
   constructor(private readonly rules: readonly PolicyRule[] = DEFAULT_BUNDLE) {}

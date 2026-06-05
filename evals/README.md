@@ -1,12 +1,12 @@
-# OpenLlama AI eval suite
+# OpenCLI AI eval suite
 
-The eval suite is how OpenLlama knows whether it is safe to run — and whether a
+The eval suite is how OpenCLI knows whether it is safe to run — and whether a
 given local model is safe to drive the agent at all (Master Plan §11, framework
 §23). It is split into two tiers.
 
 ## 1. Deterministic gating evals (run in CI, no model required)
 
-These prove OpenLlama's headline guarantees are **structural** — enforced by the
+These prove OpenCLI's headline guarantees are **structural** — enforced by the
 kernel, not by the model:
 
 - **prompt-injection** — a malicious instruction in repo content cannot cause a

@@ -1,12 +1,12 @@
 /**
- * `openllama kill-switch` — manage the global halt for all mutating tools.
+ * `opencli kill-switch` — manage the global halt for all mutating tools.
  *
  * When the kill switch is active, every attempt to execute a mutating tool
  * is blocked before any side effect runs.
  *
- *   openllama kill-switch status              # show current state
- *   openllama kill-switch activate [--reason] # activate the kill switch
- *   openllama kill-switch deactivate          # deactivate
+ *   opencli kill-switch status              # show current state
+ *   opencli kill-switch activate [--reason] # activate the kill switch
+ *   opencli kill-switch deactivate          # deactivate
  */
 
 import { Command } from "commander";

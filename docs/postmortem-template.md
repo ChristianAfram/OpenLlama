@@ -87,7 +87,7 @@ Describe the response actions taken and by whom. Include any mitigations applied
 
 What was the final state after the incident was closed? Confirm:
 
-- [ ] `openllama audit verify` passes (hash chain intact or repaired)
+- [ ] `opencli audit verify` passes (hash chain intact or repaired)
 - [ ] No secrets in audit ledger in clear text
 - [ ] Kill switch deactivated (if it was activated)
 - [ ] Any in-flight mutations accounted for (rolled back or confirmed intentional)
@@ -129,6 +129,6 @@ What should every contributor and operator know after this incident that they di
 
 - Exception record: `catalog/exceptions.yml` entry (if created)
 - Audit event IDs: (the events that captured the incident in the ledger)
-- Threat model update: `docs/threat-models/openllama.md` (if applicable)
+- Threat model update: `docs/threat-models/opencli.md` (if applicable)
 - Runbook update: `docs/runbook.md` (if applicable)
 - PR / commit: (the fix)

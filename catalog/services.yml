@@ -2,17 +2,16 @@
 #
 # Every production service must be registered with owner, tier, risk level,
 # dashboard, runbook, SLO, dependencies, data classification, and rollback path.
-# Pre-alpha: all services are LOCAL ONLY tier.
 
-- service: openllama-agent
+- service: opencli-agent
   owner: chris
   tier: local-only
   risk_level: high
   repo: .
   runtime: node
-  dashboard: "openllama audit metrics"
+  dashboard: "opencli audit metrics"
   runbook: docs/runbook.md
-  slo: docs/slo/openllama.md
+  slo: docs/slo/opencli.md
   dependencies:
     - audit-ledger
     - snapshot-store
@@ -20,7 +19,7 @@
     - ollama (local model server)
   data_classification:
     - internal
-  healthcheck: "openllama audit verify"
+  healthcheck: "opencli audit verify"
   deployment: manual (npm run build)
   rollback: docs/rollback.md
   alerts:
@@ -34,13 +33,13 @@
   risk_level: high
   repo: .
   runtime: sqlite (better-sqlite3)
-  dashboard: "openllama audit show"
+  dashboard: "opencli audit show"
   runbook: docs/runbook.md
-  slo: docs/slo/openllama.md
+  slo: docs/slo/opencli.md
   dependencies: []
   data_classification:
     - internal
-  healthcheck: "openllama audit verify"
+  healthcheck: "opencli audit verify"
   deployment: created on first write
   rollback: "append-only; export JSONL as backup before destructive ops"
   alerts:
@@ -54,7 +53,7 @@
   runtime: filesystem (content-addressed blobs)
   dashboard: "ls ~/.local/share/openllama/snapshots/ | wc -l"
   runbook: docs/runbook.md
-  slo: docs/slo/openllama.md
+  slo: docs/slo/opencli.md
   dependencies: []
   data_classification:
     - internal
@@ -69,16 +68,16 @@
   risk_level: high
   repo: .
   runtime: node
-  dashboard: "openllama audit metrics (rollback_count)"
+  dashboard: "opencli audit metrics (rollback_count)"
   runbook: docs/runbook.md
-  slo: docs/slo/openllama.md
+  slo: docs/slo/opencli.md
   dependencies:
     - audit-ledger
     - snapshot-store
   data_classification:
     - internal
   healthcheck: n/a
-  deployment: embedded in openllama CLI
+  deployment: embedded in opencli CLI
   rollback: "rollback engine itself cannot be rolled back; re-apply mutation manually"
   alerts: []
 
@@ -88,14 +87,14 @@
   risk_level: high
   repo: .
   runtime: filesystem (JSON state file)
-  dashboard: "openllama kill-switch status"
+  dashboard: "opencli kill-switch status"
   runbook: docs/runbook.md
-  slo: docs/slo/openllama.md
+  slo: docs/slo/opencli.md
   dependencies: []
   data_classification:
     - internal
-  healthcheck: "openllama kill-switch status"
+  healthcheck: "opencli kill-switch status"
   deployment: created on first activation
-  rollback: "openllama kill-switch deactivate"
+  rollback: "opencli kill-switch deactivate"
   alerts:
     - kill_switch_active

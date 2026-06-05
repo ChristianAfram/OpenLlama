@@ -1,6 +1,6 @@
 # Dependencies
 
-Runtime dependencies, documented per framework §47. OpenLlama prefers a small
+Runtime dependencies, documented per framework §47. OpenCLI prefers a small
 local implementation over a new dependency when it is safer to maintain (§15);
 each entry below earns its place.
 

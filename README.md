@@ -1,12 +1,14 @@
-# OpenLlama
+# OpenCLI
 
 **The auditable coding agent. Local-first, governance-native, compliance-ready. The agent your security team signs off on.**
 
 > Status: **public beta** (v0.7 — "Public beta"). Local-only. See [`docs/production-readiness.md`](docs/production-readiness.md) for the CONDITIONAL GO decision.
+>
+> OpenCLI is public beta, local-only, and not yet recommended for regulated production deployments. See Known Limitations below.
 
 ## The thesis
 
-Most coding agents are optimized for capability. OpenLlama is optimized for a
+Most coding agents are optimized for capability. OpenCLI is optimized for a
 single invariant:
 
 > **No tool that mutates the world runs unless an audit write succeeds first.**
@@ -23,7 +25,7 @@ everything it did.
 
 ## How it compares
 
-The coding-agent market has split into two camps that do not overlap: **capability** (fast, autonomous, no paper trail) and **governance** (closed SaaS proxies that wrap cloud tools). Nobody has fused them. OpenLlama is built in that seam.
+The coding-agent market has split into two camps that do not overlap: **capability** (fast, autonomous, no paper trail) and **governance** (closed SaaS proxies that wrap cloud tools). Nobody has fused them. OpenCLI is built in that seam.
 
 | Tool | License | Local models | Audit / evidence | Gap |
 |------|---------|-------------|-----------------|-----|
@@ -34,15 +36,9 @@ The coding-agent market has split into two camps that do not overlap: **capabili
 | **OpenHands** (~75k★) | Open | Yes | Task logs | No compliance posture |
 | **Cline** (~62k★) | Open | Yes | Limited | No governance kernel |
 | **VibeFlow / PolicyLayer** | Closed SaaS | n/a (wraps cloud) | Tamper-evident — as a paid external layer | Closed; cloud-dependent; third party holds your evidence |
-| **OpenLlama** | MIT | Yes (Ollama) | Hash-chained, append-only, on-prem, exportable | Local-model quality ceiling (see [§22](docs/OpenLlama-Master-Plan.md)) |
+| **OpenCLI** | MIT | Yes (Ollama) | Hash-chained, append-only, on-prem, exportable | Local-model quality ceiling (see [§22](docs/OpenLlama-Master-Plan.md)) |
 
-**Why this seam is structurally unoccupied:** capability tools cannot add a tamper-evident kernel without abandoning the frictionless, store-nothing identity their whole pitch rests on. Governance SaaS tools cannot go local-first open-source without cannibalising the SaaS layer that is their business model.
-
-**Who it is for:** EU/DE regulated teams (finance, health, legal, public sector), security/GRC personas, and privacy-first developers who want local autonomy *and* a personal audit trail.
-
-**Who it is NOT for:** teams who want the fastest possible autonomous coding on frontier cloud models with zero friction. That is Claude Code / OpenCode territory. OpenLlama trades raw capability ceiling for provable control. If you have no compliance or sovereignty pressure, use one of those tools.
-
-**Compliance context:** the artifacts OpenLlama produces (hash-chained ledger, SIEM export, exception records) are relevant to SOC 2 TSC, HIPAA §164.312(b), CMMC AU.2.042, NYDFS Part 500, and the EU AI Act's lifetime-logging requirement. OpenLlama does not *certify* compliance — that requires your org policy and a third-party auditor. It provides the evidence layer that *supports* an audit.
+**Compliance context:** the artifacts OpenCLI produces (hash-chained ledger, SIEM export, exception records) are relevant to SOC 2 TSC, HIPAA §164.312(b), CMMC AU.2.042, NYDFS Part 500, and the EU AI Act's lifetime-logging requirement. OpenCLI does not *certify* compliance — that requires your org policy and a third-party auditor. It provides the evidence layer that *supports* an audit.
 
 ## What works today
 
@@ -90,10 +86,11 @@ are in place. Built and tested across milestones v0.1–v0.7:
 - **AI eval suite** — deterministic, model-independent evals prove the kernel's
   guarantees are *structural*: a prompt injection in repo content cannot cause a
   mutation or secret leak **even if the model is fully compromised and obeys
-  it**. Categories: prompt-injection, destructive-refusal, secret-handling,
-  tool-permissions, approval-boundary, json-tool-args. Prompt-injection and
-  destructive-refusal are hard **100%** release gates, enforced in CI. See
-  [`evals/README.md`](evals/README.md).
+  it**. Deterministic evals verify the structural controls currently claimed for
+  the v0.7 beta. Categories: prompt-injection, destructive-refusal,
+  secret-handling, tool-permissions, approval-boundary, json-tool-args.
+  Prompt-injection and destructive-refusal are hard **100%** release gates,
+  enforced in CI. See [`evals/README.md`](evals/README.md).
 - **Independent verifier** — a second, rule-based reviewer that runs after
   policy evaluation for High/Critical actions. A BLOCK verdict is terminal —
   no approval can override it. Defense in depth against destructive commands,
@@ -102,7 +99,7 @@ are in place. Built and tested across milestones v0.1–v0.7:
 - **Kill switch** — global halt that blocks every mutating tool immediately,
   persisted to disk and survives process restarts. Automated triggers: N
   consecutive policy denials in a session (default 5), or a token-cap breach.
-  Manual control: `openllama kill-switch [status|activate|deactivate]`.
+  Manual control: `opencli kill-switch [status|activate|deactivate]`.
   Verified in CI (`kill-switch.yml`).
 - **Model governance** — `catalog/models.yml` registers every allowed model.
   In enterprise mode (`--enterprise`), the agent refuses to start with an
@@ -129,7 +126,7 @@ are in place. Built and tested across milestones v0.1–v0.7:
 - **Full catalog** — `catalog/assets.yml`, `catalog/data-flows.yml`,
   `catalog/services.yml`, `catalog/models.yml`, `catalog/exceptions.yml`.
   Every production asset tracked; every data flow documented.
-- **Threat model** — [`docs/threat-models/openllama.md`](docs/threat-models/openllama.md):
+- **Threat model** — [`docs/threat-models/opencli.md`](docs/threat-models/opencli.md):
   full STRIDE + AI threat analysis; residual risks; accepted exceptions with expiry.
 - **Production-readiness review** — [`docs/production-readiness.md`](docs/production-readiness.md):
   §51 scorecard (no 0s; Security/Data/Deployment/Observability/AI-safety/Policy all ≥2);
@@ -138,22 +135,24 @@ are in place. Built and tested across milestones v0.1–v0.7:
 ### Commands
 
 ```bash
-openllama chat  "<prompt>"            # read-only conversation with a local model
-openllama agent "<task>"              # the audited agent loop (read + draft + L3 write)
-openllama exec  <tool> --json '<args>'  # run one tool through the kernel (no model)
-openllama eval                        # run the AI eval suite + enforce the gates
-openllama policy test --json '<action>' # evaluate an action against the policy bundle
-openllama policy exceptions           # validate the exception catalog (CI gate)
-openllama kill-switch status          # show kill-switch state
-openllama kill-switch activate        # halt all mutating tools
-openllama kill-switch deactivate      # re-enable mutating tools
-openllama audit show                  # human-readable event timeline
-openllama audit verify                # check the hash chain is intact
-openllama audit export [--siem]       # JSONL export for Splunk/Elastic
-openllama audit export --otel         # OTel LogRecord JSONL for Grafana/OTLP
-openllama audit metrics [--json]      # blocked-action rate, agentic signals
-openllama audit rollback <event_id>   # reverse a specific executed mutation
+opencli chat  "<prompt>"            # read-only conversation with a local model
+opencli agent "<task>"              # the audited agent loop (read + draft + L3 write)
+opencli exec  <tool> --json '<args>'  # run one tool through the kernel (no model)
+opencli eval                        # run the AI eval suite + enforce the gates
+opencli policy test --json '<action>' # evaluate an action against the policy bundle
+opencli policy exceptions           # validate the exception catalog (CI gate)
+opencli kill-switch status          # show kill-switch state
+opencli kill-switch activate        # halt all mutating tools
+opencli kill-switch deactivate      # re-enable mutating tools
+opencli audit show                  # human-readable event timeline
+opencli audit verify                # check the hash chain is intact
+opencli audit export [--siem]       # JSONL export for Splunk/Elastic
+opencli audit export --otel         # OTel LogRecord JSONL for Grafana/OTLP
+opencli audit metrics [--json]      # blocked-action rate, agentic signals
+opencli audit rollback <event_id>   # reverse a specific executed mutation
 ```
+
+The `openllama` binary remains as a compatibility alias for v0.7 and may be removed in a later release.
 
 See [`docs/demo.md`](docs/demo.md) for the 90-second thesis demo (write a file →
 show the ledger → tamper with it → watch the chain break).
@@ -162,6 +161,15 @@ The remaining milestones are tracked in
 [`docs/OpenLlama-Master-Plan.md`](docs/OpenLlama-Master-Plan.md).
 [`CLAUDE.md`](CLAUDE.md) is the production-readiness framework that governs every
 change.
+
+## Known Limitations (v0.7)
+
+- **No signed release binaries.** Source-only distribution via git for now. Binary signing in v0.8.
+- **Local-only.** No hybrid/cloud mode. All inference and storage is on your machine.
+- **No model file integrity verification.** Pull models from a trusted Ollama registry.
+- **Snapshot blob GC not automated.** Blobs grow unbounded during a session; no auto-cleanup yet.
+- **Live second-model verifier deferred.** Rule-based verifier covers v0.7; live second model is a v0.8 item.
+- **Legacy storage paths.** Config and data still stored under `openllama/` paths for backward compatibility. Migration to `opencli/` paths in v0.8. Override with `OPENLLAMA_AUDIT_DB` / `OPENLLAMA_MODEL`.
 
 ## Requirements
 
@@ -182,10 +190,11 @@ node dist/index.js exec write_file --json '{"path":"hello.txt","content":"hi\n"}
 node dist/index.js audit verify
 ```
 
-Configuration lives in `~/.config/openllama/config.json`. You can override the
-model and host per-run with `--model` / `--host`, or via the `OPENLLAMA_MODEL`
-and `OLLAMA_HOST` environment variables (see `.env.example`). The audit ledger
-path can be overridden with `OPENLLAMA_AUDIT_DB`.
+Configuration lives in `~/.config/openllama/config.json` (v0.7 uses legacy path;
+migrates to `~/.config/opencli/` in v0.8). Override the model and host per-run
+with `--model` / `--host`, or via the `OPENLLAMA_MODEL` and `OLLAMA_HOST`
+environment variables (see `.env.example`). The audit ledger path can be
+overridden with `OPENLLAMA_AUDIT_DB`.
 
 ## Development
 
