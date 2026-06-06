@@ -8,14 +8,80 @@
  * The session store is operator state, not the compliance record. Deleting a
  * session removes a resume transcript only; the authoritative audit ledger
  * (joined by correlation_id) is append-only and is never touched here. Deletion
- * is a destructive action, so it is audited BEFORE it happens and requires an
- * explicit `--yes` confirmation (framework §41 Level 5).
+ * destroys operator history, so it is a **Level 5** action (framework §41): it
+ * is audited as `permission_level: 5` / `risk_level: critical` BEFORE it happens
+ * and requires an explicit `--yes` manual confirmation every time. The governed
+ * core lives in `deleteSessionGoverned` so the no-audit-no-action and
+ * confirmation invariants can be unit-tested directly.
  */
 
 import { Command } from "commander";
-import { getDefaultSessionStore } from "../sessions/store.js";
-import { getDefaultLedger, AuditWriteError } from "../kernel/audit.js";
+import { getDefaultSessionStore, type SessionStore } from "../sessions/store.js";
+import { getDefaultLedger, AuditWriteError, type AuditLedger } from "../kernel/audit.js";
 import { error, info, warn } from "../lib/ui.js";
+
+/** Dependencies for governed session deletion (injectable for testing). */
+export interface DeleteDeps {
+  store: Pick<SessionStore, "get" | "turnCount" | "remove">;
+  ledger: Pick<AuditLedger, "appendEvent">;
+}
+
+export type DeleteResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "confirmation_required" | "audit_failed" | "remove_failed" };
+
+/**
+ * Governed session-transcript deletion (framework §41 Level 5).
+ *
+ * Deleting a session destroys operator history, debugging context, and resume
+ * state. Per §41, deleting database records is a **Level 5** action: it requires
+ * an explicit, manual confirmation every time and must never execute
+ * automatically. We model that here:
+ *
+ *   - `confirmed` (the `--yes` flag at the CLI) is the manual confirmation. With
+ *     it false, nothing is audited and nothing is deleted.
+ *   - No-audit-no-action: the L5 audit event is written BEFORE `store.remove`.
+ *     If the audit write fails, the transcript is NOT removed.
+ *
+ * The authoritative audit ledger (joined by correlation_id) is append-only and
+ * is never touched here — only the resume transcript is removed.
+ */
+export function deleteSessionGoverned(
+  deps: DeleteDeps,
+  id: string,
+  confirmed: boolean,
+): DeleteResult {
+  const meta = deps.store.get(id);
+  if (!meta) return { ok: false, reason: "not_found" };
+
+  // Level 5: manual confirmation required every time. No confirmation → no
+  // audit, no mutation.
+  if (!confirmed) return { ok: false, reason: "confirmation_required" };
+
+  // No-audit-no-action: record the deletion before performing it.
+  try {
+    deps.ledger.appendEvent({
+      actor: "user",
+      service: "opencli-session",
+      action: "session_delete",
+      input_source: "user",
+      target: `session:${id}`,
+      risk_level: "critical",
+      permission_level: 5,
+      policy_decision: "REQUIRE_CONFIRMATION",
+      policy_reason: "session transcript deletion destroys operator history (Level 5)",
+      session_id: id,
+      correlation_id: meta.correlation_id,
+      result: "executed",
+      rollback_path: "irreversible (transcript removed; audit ledger retained)",
+    });
+  } catch (e) {
+    if (e instanceof AuditWriteError) return { ok: false, reason: "audit_failed" };
+    throw e;
+  }
+
+  return deps.store.remove(id) ? { ok: true } : { ok: false, reason: "remove_failed" };
+}
 
 export function registerSessionCommand(program: Command): void {
   const session = program
@@ -84,48 +150,38 @@ export function registerSessionCommand(program: Command): void {
     .action((id: string, opts: { yes?: boolean }) => {
       const store = getDefaultSessionStore();
       const meta = store.get(id);
-      if (!meta) {
-        error(`no session with id ${id}`);
-        process.exitCode = 1;
-        return;
-      }
-      if (!opts.yes) {
+      // Render the pre-confirmation warning before delegating, so the operator
+      // sees what they are about to destroy and how to confirm.
+      if (meta && !opts.yes) {
         warn(`session ${id} [${meta.status}] — ${String(store.turnCount(id))} turn(s)`);
-        warn("deletion is destructive and cannot be undone.");
+        warn("deletion is destructive and cannot be undone (Level 5).");
         warn(`re-run with --yes to confirm: opencli session rm ${id} --yes`);
-        process.exitCode = 1;
+      }
+
+      const result = deleteSessionGoverned(
+        { store, ledger: getDefaultLedger() },
+        id,
+        opts.yes === true,
+      );
+
+      if (result.ok) {
+        info(`deleted session ${id}`);
         return;
       }
-
-      // No-audit-no-action: record the deletion before performing it.
-      try {
-        getDefaultLedger().appendEvent({
-          actor: "user",
-          service: "opencli-session",
-          action: "session_delete",
-          input_source: "user",
-          target: `session:${id}`,
-          risk_level: "medium",
-          permission_level: 3,
-          session_id: id,
-          correlation_id: meta.correlation_id,
-          result: "executed",
-          rollback_path: "irreversible (transcript removed; audit ledger retained)",
-        });
-      } catch (e) {
-        if (e instanceof AuditWriteError) {
-          error(`refusing to delete: audit write failed (${e.message})`);
-          process.exitCode = 1;
-          return;
-        }
-        throw e;
+      switch (result.reason) {
+        case "not_found":
+          error(`no session with id ${id}`);
+          break;
+        case "confirmation_required":
+          // Warning already printed above.
+          break;
+        case "audit_failed":
+          error("refusing to delete: audit write failed (no-audit-no-action)");
+          break;
+        case "remove_failed":
+          error(`failed to delete session ${id}`);
+          break;
       }
-
-      const removed = store.remove(id);
-      if (removed) info(`deleted session ${id}`);
-      else {
-        error(`failed to delete session ${id}`);
-        process.exitCode = 1;
-      }
+      process.exitCode = 1;
     });
 }

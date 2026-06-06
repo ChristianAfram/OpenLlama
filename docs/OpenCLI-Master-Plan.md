@@ -1,4 +1,10 @@
-# OpenLlama — Master Plan
+# OpenCLI — Master Plan
+
+> **Naming note:** this document was originally written under the **OpenLlama**
+> name. **OpenCLI** is the current product name; references to "OpenLlama" below
+> are historical and refer to the same project. Legacy storage paths, the
+> `openllama` binary alias, and `OPENLLAMA_*` environment variables are retained
+> for backward compatibility.
 
 **The auditable coding agent. Local-first. Governance-native. The agent your security team signs off on.**
 

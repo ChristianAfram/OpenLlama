@@ -73,6 +73,16 @@ describe("mergeScopes — locked security fields (tighten-only)", () => {
     expect(rejections).toHaveLength(1);
   });
 
+  it("a flag MAY enable enterprise (tighten from env/flag)", () => {
+    const { effective, origins, rejections } = mergeScopes([
+      { name: "env", config: {} },
+      { name: "flag", config: { security: { enterprise: true } } },
+    ]);
+    expect(effective.security.enterprise).toBe(true);
+    expect(origins["security.enterprise"]).toBe("flag");
+    expect(rejections).toHaveLength(0);
+  });
+
   it("denied_paths are a union — a higher scope cannot remove a lower scope's entry", () => {
     const { effective } = mergeScopes([
       { name: "user", config: { security: { denied_paths: ["/etc/**", "secrets/**"] } } },
@@ -136,6 +146,19 @@ describe("project scope discovery + load", () => {
     const scope = loadProjectScope(dir);
     expect(scope.security?.enterprise).toBe(true);
     expect(scope.context?.budget).toBe(5000);
+  });
+
+  it("a syntactically malformed project YAML file does not crash the merge", () => {
+    mkdirSync(join(dir, ".opencli"), { recursive: true });
+    // Invalid YAML (unterminated flow mapping) — must not throw.
+    writeFileSync(join(dir, ".opencli", "config.yaml"), "security: { enterprise: true\n:::\n");
+    // loadProjectScope degrades to an empty scope rather than throwing.
+    expect(() => loadProjectScope(dir)).not.toThrow();
+    expect(loadProjectScope(dir)).toEqual({});
+    // The full layered load must also survive a malformed project file.
+    expect(() =>
+      loadLayeredConfig({ cwd: dir, env: { XDG_CONFIG_HOME: dir } as NodeJS.ProcessEnv }),
+    ).not.toThrow();
   });
 
   it("a malicious project file cannot loosen enterprise set by the user scope", () => {

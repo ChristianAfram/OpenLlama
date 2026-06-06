@@ -198,6 +198,40 @@ describe("structuralCompact", () => {
     const events = ledger.getEvents().filter((e) => e.action === "context_compaction");
     expect(events).toHaveLength(0);
   });
+
+  it("returns false (clear status) when over budget but nothing is evictable — no throw", async () => {
+    const mgr = make(50);
+    // A single huge USER instruction puts us over budget, but user turns are
+    // never evictable. Compaction cannot proceed safely → returns false, no throw.
+    mgr.addUser("u".repeat(100_000));
+    let result: boolean | undefined;
+    await expect(
+      (async () => {
+        result = await mgr.maybeCompact("s", "c");
+      })(),
+    ).resolves.toBeUndefined();
+    expect(result).toBe(false);
+    expect(mgr.estimateContextTokens()).toBeGreaterThan(50); // still over budget, untouched
+    expect(ledger.getEvents().filter((e) => e.action === "context_compaction")).toHaveLength(0);
+  });
+
+  it("repeated compaction terminates (no infinite loop)", async () => {
+    const mgr = make(50);
+    mgr.addUser("q");
+    mgr.addToolResult("read_file", HUGE);
+    // First call evicts the tool result.
+    const first = await mgr.maybeCompact("s", "c");
+    expect(first).toBe(true);
+    // Second call: the placeholder is non-evictable, so even if still over
+    // budget there is nothing left to evict → returns false and terminates.
+    const second = await mgr.maybeCompact("s", "c");
+    expect(second).toBe(false);
+    // A third call is likewise a no-op — the loop has a terminal state.
+    const third = await mgr.maybeCompact("s", "c");
+    expect(third).toBe(false);
+    // Exactly one compaction was ever audited.
+    expect(ledger.getEvents().filter((e) => e.action === "context_compaction")).toHaveLength(1);
+  });
 });
 
 // ─── Model compaction ────────────────────────────────────────────────────────
