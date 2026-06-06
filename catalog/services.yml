@@ -148,3 +148,30 @@
     audit event; fail-closed (block) on spawn failure/timeout for pre_tool.
     Hooks run at the engine dispatch layer as an additional restriction and can
     never bypass the executor's no-audit-no-action gate.
+
+- service: skill-registry
+  owner: chris
+  tier: local-only
+  risk_level: low
+  repo: .
+  runtime: node (filesystem discovery)
+  dashboard: "opencli audit show (filter tool_name=use_skill)"
+  runbook: docs/skills.md
+  slo: docs/slo/opencli.md
+  dependencies:
+    - audit-ledger
+  data_classification:
+    - internal
+    - external
+  healthcheck: "n/a (scanned per agent run from .opencli/skills/)"
+  deployment: scanned per agent run when .opencli/skills/ is present
+  rollback: "remove .opencli/skills/<name>/ or the skills directory"
+  alerts: []
+  notes: >-
+    Reusable-guidance extensibility layer (v0.8 B6). Skill bodies are UNTRUSTED
+    external content — loaded via the read-only use_skill tool and fenced as
+    data through the normal tool-result path. A skill can never grant a
+    permission, approve an action, or lower a permission level; the kernel gates
+    everything regardless of skill text. Discovery/loading is path-confined to
+    .opencli/skills/<slug>/ (strict slug regex blocks traversal). Every load is
+    audited as a use_skill tool call.

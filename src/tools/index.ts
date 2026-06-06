@@ -15,8 +15,18 @@ import { writeFileTool } from "./write_file.js";
 import { editFileTool } from "./edit_file.js";
 import { runShellTool } from "./run_shell.js";
 import { gitTool } from "./git.js";
+import { makeUseSkillTool } from "./use_skill.js";
+import type { SkillRegistry } from "../skills/registry.js";
 
-export function buildDefaultRegistry(): ToolRegistry {
+export interface BuildRegistryOptions {
+  /**
+   * Skill registry (v0.8 — B6). When provided and non-empty, a use_skill tool
+   * is registered so the model can load skill guidance (as fenced untrusted data).
+   */
+  skills?: SkillRegistry;
+}
+
+export function buildDefaultRegistry(opts: BuildRegistryOptions = {}): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(readFileTool);
   registry.register(listDirTool);
@@ -26,6 +36,9 @@ export function buildDefaultRegistry(): ToolRegistry {
   registry.register(editFileTool);
   registry.register(runShellTool);
   registry.register(gitTool);
+  if (opts.skills && opts.skills.list().length > 0) {
+    registry.register(makeUseSkillTool(opts.skills));
+  }
   return registry;
 }
 
