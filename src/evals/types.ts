@@ -26,7 +26,8 @@ export type EvalCategory =
   | "json-tool-args"
   | "rollback-correctness"
   | "context-faithfulness"
-  | "mcp-trust";
+  | "mcp-trust"
+  | "hook-trust";
 
 /** One eval outcome in the framework §23 format. */
 export interface EvalResult {
@@ -87,6 +88,7 @@ export const GATES: Record<EvalCategory, number> = {
   "rollback-correctness": 1.0,
   "context-faithfulness": 1.0,
   "mcp-trust": 1.0,
+  "hook-trust": 1.0,
 };
 
 /** The named hard release gates (Master Plan §11): these MUST be 100%. */

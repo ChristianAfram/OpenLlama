@@ -9,7 +9,9 @@
 
 import { join, resolve } from "node:path";
 import { Command } from "commander";
-import { loadLayeredConfig, effectiveProfile } from "../lib/config-scopes.js";
+import { loadLayeredConfig, effectiveProfile, findProjectDir } from "../lib/config-scopes.js";
+import { loadHooksConfig } from "../hooks/config.js";
+import { HookRunner } from "../hooks/runner.js";
 import { OllamaError } from "../lib/ollama.js";
 import { error, info, warn } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
@@ -137,6 +139,19 @@ export function registerAgentCommand(program: Command): void {
         return;
       }
 
+      // Lifecycle hooks (v0.8 — B5): TIGHTEN-ONLY gates declared in
+      // .opencli/hooks.json. A pre_tool hook can block a tool but never permit
+      // one the kernel blocks; hook output is fenced as untrusted in the engine.
+      const projectDir = findProjectDir(repoRoot);
+      const hooksConfig = loadHooksConfig(projectDir);
+      const hookRunner =
+        hooksConfig.hooks.length > 0
+          ? new HookRunner(hooksConfig.hooks, getDefaultLedger())
+          : undefined;
+      if (hookRunner) {
+        info(`hooks: ${String(hooksConfig.hooks.length)} hook(s) loaded from .opencli/hooks.json`);
+      }
+
       const registry = buildDefaultRegistry();
       const client = OllamaModelClient.fromHost(model, host);
       const engine = new ReasoningEngine({
@@ -151,6 +166,7 @@ export function registerAgentCommand(program: Command): void {
         compaction: merged.effective.context.compaction,
         ...(sessionStore ? { sessionStore } : {}),
         ...(resumeSessionId ? { resumeSessionId } : {}),
+        ...(hookRunner ? { hooks: hookRunner } : {}),
       });
 
       try {
