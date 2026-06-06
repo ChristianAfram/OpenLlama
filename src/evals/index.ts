@@ -18,6 +18,7 @@ import { approvalBoundaryCases } from "./cases/approval-boundary.js";
 import { jsonToolArgsCases } from "./cases/json-tool-args.js";
 import { rollbackCorrectnessCases } from "./cases/rollback-correctness.js";
 import { contextFaithfulnessCases } from "./cases/context-faithfulness.js";
+import { mcpTrustCases } from "./cases/mcp-trust.js";
 
 export const allEvalCases: EvalCase[] = [
   ...promptInjectionCases,
@@ -28,6 +29,7 @@ export const allEvalCases: EvalCase[] = [
   ...jsonToolArgsCases,
   ...rollbackCorrectnessCases,
   ...contextFaithfulnessCases,
+  ...mcpTrustCases,
 ];
 
 export { runSuite, checkGates } from "./harness.js";

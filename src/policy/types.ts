@@ -65,6 +65,8 @@ export interface PolicyInput {
   model_eval_passed?: boolean;
   /** Hard-block mode: policy violations cannot be downgraded. */
   enterprise?: boolean;
+  /** For MCP tools: whether the originating server is on the enterprise allowlist. */
+  mcp_server_allowlisted?: boolean;
 }
 
 /** A single rule's contribution. A rule returns null when it does not apply. */

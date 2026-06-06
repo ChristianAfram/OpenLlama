@@ -234,6 +234,9 @@ export class Executor {
       ...(opts.model_eval_passed !== undefined
         ? { model_eval_passed: opts.model_eval_passed }
         : {}),
+      ...(tool.descriptor.mcp_allowlisted !== undefined
+        ? { mcp_server_allowlisted: tool.descriptor.mcp_allowlisted }
+        : {}),
     };
     const policy = this.policy.evaluate(policyInput);
 
@@ -336,6 +339,7 @@ export class Executor {
       ({ event_id } = ledger.appendEvent({
         ...auditBase,
         ...approvalFields,
+        ...(planned.extra_audit ?? {}),
         target: planned.target,
         data_changed: planned.data_changed,
         rollback_path: planned.rollback_path,
