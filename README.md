@@ -161,6 +161,7 @@ opencli chat  "<prompt>"            # read-only conversation with a local model
 opencli agent "<task>"              # the audited agent loop (read + draft + L3 write)
 opencli agent "<task>" --continue   # resume the most recent session for this dir
 opencli agent "<task>" --resume <id>  # resume a specific session
+opencli agent "<task>" --json       # NDJSON event stream for editors (IDE bridge)
 opencli session list                # list resumable sessions
 opencli session show <id>           # session metadata + redacted transcript
 opencli session rm <id> --yes       # delete a session (Level 5, audited)

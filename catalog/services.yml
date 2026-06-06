@@ -203,3 +203,30 @@
     untrusted data. Delegation is depth-capped (maxDepth, default 2; over-limit
     audited as subagent:denied). A child shares the parent's correlation_id but
     gets a fresh session_id; the kill switch is shared across the tree.
+
+- service: ide-bridge
+  owner: chris
+  tier: local-only
+  risk_level: low
+  repo: .
+  runtime: node (NDJSON stdout stream) + VS Code extension (extension/)
+  dashboard: "opencli agent --json"
+  runbook: docs/ide-bridge.md
+  slo: docs/slo/opencli.md
+  dependencies:
+    - audit-ledger
+    - tool-executor
+  data_classification:
+    - internal
+  healthcheck: "opencli agent --json '<task>'"
+  deployment: "--json flag on agent; extension scaffold under extension/"
+  rollback: "n/a (output formatting only; omit --json)"
+  alerts: []
+  notes: >-
+    IDE milestone slice (v0.8 C1). `opencli agent --json` emits a stable NDJSON
+    AgentEvent stream on stdout (human progress goes to stderr). The stream is
+    produced by a read-only AgentObserver — it cannot run a tool, mutate state,
+    or bypass a kernel gate; --json changes output formatting only, every action
+    is still gated and audited. The VS Code extension (extension/) is a thin
+    client that spawns the opencli binary and renders this stream; it contains no
+    kernel logic. Bridge logic is tested in tests/ide-bridge.test.ts.
