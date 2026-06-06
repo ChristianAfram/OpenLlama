@@ -42,6 +42,16 @@ export interface ToolDescriptor {
 export interface ToolContext {
   /** Repository root all path-bound tools are confined to. */
   repoRoot: string;
+  /**
+   * Correlation id of the current run (v0.8 — B7). Threaded so the delegate
+   * tool can run a subagent under the SAME audit timeline as its parent.
+   */
+  correlationId?: string;
+  /**
+   * Subagent nesting depth of the current run (v0.8 — B7). 0 = top-level agent.
+   * The delegate tool refuses to spawn beyond the runner's max depth.
+   */
+  subagentDepth?: number;
 }
 
 export interface ToolResult {

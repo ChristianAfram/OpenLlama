@@ -99,6 +99,13 @@ export interface EngineOptions {
    * Hook output is fenced as untrusted data before entering the context.
    */
   hooks?: HookRunner;
+  /**
+   * Subagent nesting depth (v0.8 — B7). 0 = top-level agent. Threaded into the
+   * ToolContext so the delegate tool can enforce the max-depth ceiling. A
+   * subagent never has more privilege than its parent: like the parent loop it
+   * runs with no ApprovalProvider, so it cannot execute L4/L5 actions.
+   */
+  subagentDepth?: number;
 }
 
 export interface EngineRunResult {
@@ -130,6 +137,7 @@ export class ReasoningEngine {
   private readonly contextBudget: number;
   private readonly compaction: "structural" | "model";
   private readonly hooks: HookRunner | undefined;
+  private readonly subagentDepth: number;
 
   constructor(opts: EngineOptions) {
     this.registry = opts.registry;
@@ -151,6 +159,7 @@ export class ReasoningEngine {
     this.contextBudget = opts.contextBudget ?? DEFAULT_CONTEXT_BUDGET;
     this.compaction = opts.compaction ?? "structural";
     this.hooks = opts.hooks;
+    this.subagentDepth = opts.subagentDepth ?? 0;
     this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
@@ -412,6 +421,19 @@ export class ReasoningEngine {
     return result;
   }
 
+  /**
+   * The ToolContext for this run, augmented with the correlation id and subagent
+   * depth so the delegate tool can spawn a child under the same audit timeline
+   * and enforce the depth ceiling. The base repoRoot is unchanged.
+   */
+  private runCtx(correlationId: string): ToolContext {
+    return {
+      ...this.toolContext,
+      correlationId,
+      subagentDepth: this.subagentDepth,
+    };
+  }
+
   /** The pre/post-hook-free dispatch core (executor for mutations, dispatcher otherwise). */
   private async dispatchInner(
     name: string,
@@ -428,7 +450,7 @@ export class ReasoningEngine {
 
     const outcome = await dispatchTool(this.registry, name, args, {
       ...(this.ledger ? { ledger: this.ledger } : {}),
-      ctx: this.toolContext,
+      ctx: this.runCtx(correlationId),
       session_id: sessionId,
       correlation_id: correlationId,
       model: this.model.model,
@@ -477,7 +499,7 @@ export class ReasoningEngine {
   ): Promise<{ feedback: string; invalidArgs: boolean; policyDenied: boolean; auditEventId?: string }> {
     const outcome = await this.executor.execute(tool, args, {
       ...(this.ledger ? { ledger: this.ledger } : {}),
-      ctx: this.toolContext,
+      ctx: this.runCtx(correlationId),
       session_id: sessionId,
       correlation_id: correlationId,
       model: this.model.model,

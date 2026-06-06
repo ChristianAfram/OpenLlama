@@ -28,7 +28,8 @@ export type EvalCategory =
   | "context-faithfulness"
   | "mcp-trust"
   | "hook-trust"
-  | "skill-trust";
+  | "skill-trust"
+  | "subagent-trust";
 
 /** One eval outcome in the framework §23 format. */
 export interface EvalResult {
@@ -91,6 +92,7 @@ export const GATES: Record<EvalCategory, number> = {
   "mcp-trust": 1.0,
   "hook-trust": 1.0,
   "skill-trust": 1.0,
+  "subagent-trust": 1.0,
 };
 
 /** The named hard release gates (Master Plan §11): these MUST be 100%. */

@@ -13,6 +13,8 @@ import { loadLayeredConfig, effectiveProfile, findProjectDir } from "../lib/conf
 import { loadHooksConfig } from "../hooks/config.js";
 import { HookRunner } from "../hooks/runner.js";
 import { SkillRegistry } from "../skills/registry.js";
+import { SubagentRunner } from "../reasoning/subagent.js";
+import { makeDelegateTool } from "../tools/delegate.js";
 import { OllamaError } from "../lib/ollama.js";
 import { error, info, warn } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
@@ -160,18 +162,42 @@ export function registerAgentCommand(program: Command): void {
         info(`skills: ${String(skills.list().length)} skill(s) available via use_skill`);
       }
 
-      const registry = buildDefaultRegistry({ skills });
       const client = OllamaModelClient.fromHost(model, host);
+      const verifier = new RuleBasedVerifier();
+      const snapshots = getDefaultSnapshotStore();
+
+      // Subagents (v0.8 — B7): the model can `delegate` a focused sub-task to a
+      // child agent that runs the SAME kernel (so it has no extra privilege) and
+      // shares the parent's correlation_id. The registryFactory adds the delegate
+      // tool to every (parent and child) registry; depth is capped at maxDepth.
+      const registryFactory = () => {
+        const r = buildDefaultRegistry({ skills });
+        r.register(makeDelegateTool(() => subagentRunner));
+        return r;
+      };
+      const subagentRunner = new SubagentRunner({
+        registryFactory,
+        model: client,
+        toolContext: { repoRoot },
+        verifier,
+        snapshots,
+        contextBudget: merged.effective.context.budget,
+        compaction: merged.effective.context.compaction,
+        maxDepth: 2,
+      });
+
+      const registry = registryFactory();
       const engine = new ReasoningEngine({
         registry,
         model: client,
         toolContext: { repoRoot },
         maxIterations: Number(options.maxIterations),
-        verifier: new RuleBasedVerifier(),
+        verifier,
         model_eval_passed: governance.eval_passed,
-        snapshots: getDefaultSnapshotStore(),
+        snapshots,
         contextBudget: merged.effective.context.budget,
         compaction: merged.effective.context.compaction,
+        subagentDepth: 0,
         ...(sessionStore ? { sessionStore } : {}),
         ...(resumeSessionId ? { resumeSessionId } : {}),
         ...(hookRunner ? { hooks: hookRunner } : {}),
