@@ -29,8 +29,10 @@ import {
 } from "../tools/registry.js";
 import type { ModelClient, ToolDefinition } from "./model-client.js";
 import { ContextManager } from "./context-manager.js";
+import { fenceUntrusted } from "./context.js";
 import type { SessionStore } from "../sessions/store.js";
 import { DEFAULT_CONTEXT_BUDGET } from "../lib/config-scopes.js";
+import type { HookRunner } from "../hooks/runner.js";
 
 export interface EngineOptions {
   registry: ToolRegistry;
@@ -90,6 +92,13 @@ export interface EngineOptions {
    * "model": summarise the evicted span via a model call.
    */
   compaction?: "structural" | "model";
+  /**
+   * Lifecycle hook runner (v0.8 — B5). When provided, hooks fire at
+   * session_start / pre_tool / post_tool / session_end. pre_tool hooks are
+   * TIGHTEN-ONLY: they can block a tool but never permit one the kernel blocks.
+   * Hook output is fenced as untrusted data before entering the context.
+   */
+  hooks?: HookRunner;
 }
 
 export interface EngineRunResult {
@@ -120,6 +129,7 @@ export class ReasoningEngine {
   private readonly overrideCorrelationId: string | undefined;
   private readonly contextBudget: number;
   private readonly compaction: "structural" | "model";
+  private readonly hooks: HookRunner | undefined;
 
   constructor(opts: EngineOptions) {
     this.registry = opts.registry;
@@ -140,6 +150,7 @@ export class ReasoningEngine {
     this.overrideCorrelationId = opts.correlationId;
     this.contextBudget = opts.contextBudget ?? DEFAULT_CONTEXT_BUDGET;
     this.compaction = opts.compaction ?? "structural";
+    this.hooks = opts.hooks;
     this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
@@ -192,6 +203,14 @@ export class ReasoningEngine {
     ctx.addUser(instruction);
     store?.appendTurn(sessionId, { role: "user", content: instruction });
 
+    // Fire session_start hooks (informational; cannot block a session).
+    this.hooks?.run("session_start", {
+      event: "session_start",
+      session_id: sessionId,
+      correlation_id: correlationId,
+      cwd: this.toolContext.repoRoot,
+    });
+
     let iterations = 0;
     let toolCalls = 0;
     // Consecutive invalid-argument failures. Reset on any valid dispatch. When
@@ -218,6 +237,13 @@ export class ReasoningEngine {
         stop_reason: result.stopReason,
         total_input_tokens: inputTokens,
         total_output_tokens: outputTokens,
+      });
+      // Fire session_end hooks (informational; the run is already complete).
+      this.hooks?.run("session_end", {
+        event: "session_end",
+        session_id: sessionId,
+        correlation_id: correlationId,
+        cwd: this.toolContext.repoRoot,
       });
       return result;
     };
@@ -329,6 +355,65 @@ export class ReasoningEngine {
    * can self-correct on the next turn.
    */
   private async dispatchOnce(
+    name: string,
+    args: unknown,
+    sessionId: string,
+    correlationId: string,
+  ): Promise<{ feedback: string; invalidArgs: boolean; policyDenied: boolean; auditEventId?: string }> {
+    // pre_tool hooks (TIGHTEN-ONLY): a hook may block a tool before it runs, but
+    // can never permit one. A block short-circuits dispatch entirely — the tool
+    // never executes, and the block is audited inside the hook runner.
+    if (this.hooks?.hasHooks("pre_tool")) {
+      const outcome = this.hooks.run("pre_tool", {
+        event: "pre_tool",
+        session_id: sessionId,
+        correlation_id: correlationId,
+        tool_name: name,
+        tool_args: args,
+        cwd: this.toolContext.repoRoot,
+      });
+      if (outcome.blocked) {
+        return {
+          feedback:
+            `ERROR: "${name}" was blocked by hook "${outcome.blockedBy}" and NOT executed: ` +
+            `${outcome.blockReason}\nThis is a policy gate; do not retry the same action.`,
+          invalidArgs: false,
+          policyDenied: true,
+        };
+      }
+    }
+
+    const result = await this.dispatchInner(name, args, sessionId, correlationId);
+
+    // post_tool hooks are observational. Their output is UNTRUSTED and is fenced
+    // before being appended to the feedback. They cannot un-block or alter the
+    // tool's result — only add fenced commentary.
+    if (this.hooks?.hasHooks("post_tool")) {
+      const outcome = this.hooks.run("post_tool", {
+        event: "post_tool",
+        session_id: sessionId,
+        correlation_id: correlationId,
+        tool_name: name,
+        tool_result: result.feedback,
+        cwd: this.toolContext.repoRoot,
+      });
+      const notes = outcome.results
+        .map((r) => r.output.trim())
+        .filter((o) => o.length > 0)
+        .join("\n");
+      if (notes.length > 0) {
+        return {
+          ...result,
+          feedback: `${result.feedback}\n${fenceUntrusted(`hook:post_tool:${name}`, notes)}`,
+        };
+      }
+    }
+
+    return result;
+  }
+
+  /** The pre/post-hook-free dispatch core (executor for mutations, dispatcher otherwise). */
+  private async dispatchInner(
     name: string,
     args: unknown,
     sessionId: string,

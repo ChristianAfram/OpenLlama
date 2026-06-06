@@ -121,3 +121,30 @@
     content are redacted via redactValue() before storage. The audit ledger
     (not this store) is the authoritative forensic record. session rm is
     a MutatingTool routed through the kernel (audited).
+
+- service: hook-runner
+  owner: chris
+  tier: local-only
+  risk_level: medium
+  repo: .
+  runtime: node (subprocess spawn)
+  dashboard: "opencli audit show (filter action=hook_execution)"
+  runbook: docs/hooks.md
+  slo: docs/slo/opencli.md
+  dependencies:
+    - audit-ledger
+  data_classification:
+    - internal
+    - external
+  healthcheck: "n/a (invoked per agent run from .opencli/hooks.json)"
+  deployment: loaded per agent run when .opencli/hooks.json is present
+  rollback: "remove or empty .opencli/hooks.json"
+  alerts: []
+  notes: >-
+    TIGHTEN-ONLY extensibility layer (v0.8 B5). pre_tool hooks may BLOCK a tool
+    but can never permit one the kernel blocks, grant approval, or lower a
+    permission level. Hook stdout is UNTRUSTED external content — fenced via
+    fenceUntrusted before context entry. Every hook run writes a hook_execution
+    audit event; fail-closed (block) on spawn failure/timeout for pre_tool.
+    Hooks run at the engine dispatch layer as an additional restriction and can
+    never bypass the executor's no-audit-no-action gate.

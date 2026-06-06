@@ -19,6 +19,7 @@ import { jsonToolArgsCases } from "./cases/json-tool-args.js";
 import { rollbackCorrectnessCases } from "./cases/rollback-correctness.js";
 import { contextFaithfulnessCases } from "./cases/context-faithfulness.js";
 import { mcpTrustCases } from "./cases/mcp-trust.js";
+import { hookTrustCases } from "./cases/hook-trust.js";
 
 export const allEvalCases: EvalCase[] = [
   ...promptInjectionCases,
@@ -30,6 +31,7 @@ export const allEvalCases: EvalCase[] = [
   ...rollbackCorrectnessCases,
   ...contextFaithfulnessCases,
   ...mcpTrustCases,
+  ...hookTrustCases,
 ];
 
 export { runSuite, checkGates } from "./harness.js";
