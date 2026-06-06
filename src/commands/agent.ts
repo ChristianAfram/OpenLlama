@@ -20,6 +20,7 @@ import { RuleBasedVerifier } from "../kernel/verifier.js";
 import { getDefaultSnapshotStore } from "../kernel/snapshot.js";
 import { getDefaultLedger } from "../kernel/audit.js";
 import { PROMPT_VERSION } from "../reasoning/context.js";
+import { getDefaultSessionStore, type SessionStore } from "../sessions/store.js";
 
 interface AgentOptions {
   model?: string;
@@ -27,6 +28,8 @@ interface AgentOptions {
   cwd?: string;
   maxIterations?: string;
   enterprise?: boolean;
+  resume?: string;
+  continue?: boolean;
 }
 
 export function registerAgentCommand(program: Command): void {
@@ -41,6 +44,8 @@ export function registerAgentCommand(program: Command): void {
     .option("--cwd <dir>", "repository root to operate in (default: current dir)")
     .option("--max-iterations <n>", "hard cap on reasoning iterations", "25")
     .option("--enterprise", "enterprise hard-block mode (model must be registered and evaluated)")
+    .option("--resume <id>", "resume a previous session by id")
+    .option("--continue", "resume the most recent session for this directory")
     .action(async (questionParts: string[], options: AgentOptions) => {
       const question = questionParts.join(" ").trim();
       const repoRoot = resolve(options.cwd ?? process.cwd());
@@ -105,6 +110,33 @@ export function registerAgentCommand(program: Command): void {
         warn(`model governance: ${governance.reason}`);
       }
 
+      // Session store: persist this run so it can be resumed. Degrade gracefully
+      // if the store can't be opened — persistence is convenience, not a gate.
+      let sessionStore: SessionStore | undefined;
+      try {
+        sessionStore = getDefaultSessionStore();
+      } catch (e) {
+        warn(`sessions: could not open session store, running without persistence: ${String(e)}`);
+      }
+
+      // Resolve which session to resume: --resume <id> wins; --continue picks
+      // the most recent session for this directory.
+      let resumeSessionId: string | undefined = options.resume;
+      if (!resumeSessionId && options.continue && sessionStore) {
+        const latest = sessionStore.latestForCwd(repoRoot);
+        if (latest) {
+          resumeSessionId = latest.session_id;
+          info(`continuing session ${latest.session_id}`);
+        } else {
+          warn("sessions: no previous session for this directory; starting fresh");
+        }
+      }
+      if (resumeSessionId && sessionStore && !sessionStore.get(resumeSessionId)) {
+        error(`no session with id ${resumeSessionId}`);
+        process.exitCode = 1;
+        return;
+      }
+
       const registry = buildDefaultRegistry();
       const client = OllamaModelClient.fromHost(model, host);
       const engine = new ReasoningEngine({
@@ -115,6 +147,8 @@ export function registerAgentCommand(program: Command): void {
         verifier: new RuleBasedVerifier(),
         model_eval_passed: governance.eval_passed,
         snapshots: getDefaultSnapshotStore(),
+        ...(sessionStore ? { sessionStore } : {}),
+        ...(resumeSessionId ? { resumeSessionId } : {}),
       });
 
       try {

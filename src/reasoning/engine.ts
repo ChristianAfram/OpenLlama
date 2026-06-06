@@ -29,6 +29,7 @@ import {
 } from "../tools/registry.js";
 import { ConversationContext } from "./context.js";
 import type { ModelClient, ToolDefinition } from "./model-client.js";
+import type { SessionStore } from "../sessions/store.js";
 
 export interface EngineOptions {
   registry: ToolRegistry;
@@ -62,6 +63,21 @@ export interface EngineOptions {
    * before-content for reversible mutations so the rollback engine can undo them.
    */
   snapshots?: SnapshotStore;
+  /**
+   * Session store (v0.8). When provided, the run is persisted as a resumable
+   * session: turns, token usage, and final status are recorded.
+   */
+  sessionStore?: SessionStore;
+  /**
+   * Resume an existing session: its transcript is rehydrated into the context
+   * and the stored session_id + correlation_id are reused so the audit timeline
+   * stays continuous. Requires `sessionStore`.
+   */
+  resumeSessionId?: string;
+  /** Override the generated session id (used by resume + subagent orchestration). */
+  sessionId?: string;
+  /** Override the generated correlation id (shared across a subagent tree). */
+  correlationId?: string;
 }
 
 export interface EngineRunResult {
@@ -80,13 +96,16 @@ export class ReasoningEngine {
   private readonly repairAttempts: number;
   private readonly toolDefs: ToolDefinition[];
   private readonly executor: Executor;
-  private readonly sessionId = randomUUID();
+  private readonly defaultSessionId: string;
   private readonly killSwitch?: KillSwitch;
   private readonly verifier?: Verifier;
   private readonly consecutiveDenialsLimit: number;
   private readonly maxTotalTokens: number | undefined;
   private readonly modelEvalPassed: boolean | undefined;
   private readonly snapshots: SnapshotStore | undefined;
+  private readonly sessionStore: SessionStore | undefined;
+  private readonly resumeSessionId: string | undefined;
+  private readonly overrideCorrelationId: string | undefined;
 
   constructor(opts: EngineOptions) {
     this.registry = opts.registry;
@@ -101,6 +120,10 @@ export class ReasoningEngine {
     this.maxTotalTokens = opts.maxTotalTokens;
     this.modelEvalPassed = opts.model_eval_passed;
     this.snapshots = opts.snapshots;
+    this.sessionStore = opts.sessionStore;
+    this.resumeSessionId = opts.resumeSessionId;
+    this.defaultSessionId = opts.sessionId ?? randomUUID();
+    this.overrideCorrelationId = opts.correlationId;
     this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
@@ -120,8 +143,32 @@ export class ReasoningEngine {
       };
     }
 
-    const ctx = new ConversationContext();
+    // Resolve the session identity. On resume we reuse the stored ids so the
+    // audit timeline stays continuous; otherwise we mint a fresh correlation id.
+    const store = this.sessionStore;
+    const resumeMeta =
+      this.resumeSessionId && store ? store.get(this.resumeSessionId) : null;
+    const sessionId = resumeMeta?.session_id ?? this.defaultSessionId;
+    const correlationId =
+      resumeMeta?.correlation_id ?? this.overrideCorrelationId ?? randomUUID();
+
+    // Build the context: rehydrate a resumed transcript, else start fresh.
+    let ctx: ConversationContext;
+    if (resumeMeta && store) {
+      ctx = ConversationContext.hydrate(store.getTurns(resumeMeta.session_id));
+    } else {
+      ctx = new ConversationContext();
+      // Register a new session row before recording any turns.
+      store?.create({
+        session_id: sessionId,
+        correlation_id: correlationId,
+        cwd: this.toolContext.repoRoot,
+        model: this.model.model,
+        prompt_version: ctx.promptVersion,
+      });
+    }
     ctx.addUser(instruction);
+    store?.appendTurn(sessionId, { role: "user", content: instruction });
 
     let iterations = 0;
     let toolCalls = 0;
@@ -132,9 +179,26 @@ export class ReasoningEngine {
     // Consecutive mutations blocked by policy — triggers the kill switch when
     // it exceeds consecutiveDenialsLimit.
     let consecutiveDenials = 0;
-    // Total tokens consumed across all model calls (from usage field when available).
-    let totalTokens = 0;
-    const correlationId = randomUUID();
+    // Token usage across all model calls (from usage field when available).
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    // Record final status to the session store, then return the result.
+    const finalize = (result: EngineRunResult): EngineRunResult => {
+      const status =
+        result.stopReason === "final_answer"
+          ? "completed"
+          : result.stopReason === "kill_switch"
+            ? "killed"
+            : "aborted";
+      store?.finish(sessionId, {
+        status,
+        stop_reason: result.stopReason,
+        total_input_tokens: inputTokens,
+        total_output_tokens: outputTokens,
+      });
+      return result;
+    };
 
     while (iterations < this.maxIterations) {
       iterations++;
@@ -142,52 +206,65 @@ export class ReasoningEngine {
 
       // Track token usage for cost controls.
       if (turn.usage) {
-        totalTokens += (turn.usage.input_tokens ?? 0) + (turn.usage.output_tokens ?? 0);
+        inputTokens += turn.usage.input_tokens ?? 0;
+        outputTokens += turn.usage.output_tokens ?? 0;
+        const totalTokens = inputTokens + outputTokens;
         if (this.maxTotalTokens !== undefined && totalTokens > this.maxTotalTokens) {
           const reason = `token cap exceeded: ${String(totalTokens)} > ${String(this.maxTotalTokens)}`;
           this.killSwitch?.activate(reason, "cost_cap");
-          return {
+          return finalize({
             answer: `Aborted: ${reason}. Kill switch activated.`,
             iterations,
             toolCalls,
             stopReason: "kill_switch",
-          };
+          });
         }
       }
 
-      if (turn.content) ctx.addAssistant(turn.content);
+      if (turn.content) {
+        ctx.addAssistant(turn.content);
+        store?.appendTurn(sessionId, { role: "assistant", content: turn.content });
+      }
 
       // No tool calls → the model is done.
       if (turn.tool_calls.length === 0) {
-        return {
+        return finalize({
           answer: turn.content,
           iterations,
           toolCalls,
           stopReason: "final_answer",
-        };
+        });
       }
 
       // Dispatch each requested tool call.
       for (const call of turn.tool_calls) {
         toolCalls++;
-        const { feedback, invalidArgs, policyDenied } = await this.dispatchOnce(
+        const { feedback, invalidArgs, policyDenied, auditEventId } = await this.dispatchOnce(
           call.name,
           call.arguments,
+          sessionId,
           correlationId,
         );
         ctx.addToolResult(call.name, feedback);
+        store?.appendTurn(sessionId, {
+          role: "tool_result",
+          source: `tool:${call.name}`,
+          tool_name: call.name,
+          content: feedback,
+          audit_event_id: auditEventId ?? null,
+        });
 
         if (invalidArgs) {
           consecutiveInvalidArgs++;
           if (consecutiveInvalidArgs > this.repairAttempts) {
-            return {
+            return finalize({
               answer:
                 `Aborted: the model failed to produce valid arguments for ` +
                 `"${call.name}" after ${String(this.repairAttempts)} repair attempt(s).`,
               iterations,
               toolCalls,
               stopReason: "repair_exhausted",
-            };
+            });
           }
         } else {
           consecutiveInvalidArgs = 0;
@@ -200,12 +277,12 @@ export class ReasoningEngine {
             const reason =
               `${String(consecutiveDenials)} consecutive mutations blocked by policy or verifier`;
             this.killSwitch?.activate(reason, "consecutive_denials");
-            return {
+            return finalize({
               answer: `Aborted: ${reason}. Kill switch activated to halt runaway action attempts.`,
               iterations,
               toolCalls,
               stopReason: "kill_switch",
-            };
+            });
           }
         } else {
           consecutiveDenials = 0;
@@ -213,12 +290,12 @@ export class ReasoningEngine {
       }
     }
 
-    return {
+    return finalize({
       answer: "Reached the reasoning iteration cap before producing a final answer.",
       iterations,
       toolCalls,
       stopReason: "iteration_cap",
-    };
+    });
   }
 
   /**
@@ -231,26 +308,32 @@ export class ReasoningEngine {
   private async dispatchOnce(
     name: string,
     args: unknown,
+    sessionId: string,
     correlationId: string,
-  ): Promise<{ feedback: string; invalidArgs: boolean; policyDenied: boolean }> {
+  ): Promise<{ feedback: string; invalidArgs: boolean; policyDenied: boolean; auditEventId?: string }> {
     // Mutating tools (L3+) go through the executor and the no-audit-no-action
     // gate. Read/draft tools (L0/L1) use the direct dispatcher.
     const tool = this.registry.get(name);
     if (tool && isMutatingTool(tool)) {
-      return this.executeMutation(tool, args, correlationId);
+      return this.executeMutation(tool, args, sessionId, correlationId);
     }
 
     const outcome = await dispatchTool(this.registry, name, args, {
       ...(this.ledger ? { ledger: this.ledger } : {}),
       ctx: this.toolContext,
-      session_id: this.sessionId,
+      session_id: sessionId,
       correlation_id: correlationId,
       model: this.model.model,
     });
 
     switch (outcome.status) {
       case "ok":
-        return { feedback: outcome.result.output, invalidArgs: false, policyDenied: false };
+        return {
+          feedback: outcome.result.output,
+          invalidArgs: false,
+          policyDenied: false,
+          auditEventId: outcome.event_id,
+        };
       case "invalid_args":
         return {
           feedback:
@@ -259,6 +342,7 @@ export class ReasoningEngine {
             `Correct the arguments to match the tool's schema and try again.`,
           invalidArgs: true,
           policyDenied: false,
+          auditEventId: outcome.event_id,
         };
       case "unknown_tool":
         return {
@@ -271,6 +355,7 @@ export class ReasoningEngine {
           feedback: `ERROR: tool "${name}" failed: ${outcome.error}`,
           invalidArgs: false,
           policyDenied: false,
+          auditEventId: outcome.event_id,
         };
     }
   }
@@ -279,12 +364,13 @@ export class ReasoningEngine {
   private async executeMutation(
     tool: MutatingTool,
     args: unknown,
+    sessionId: string,
     correlationId: string,
-  ): Promise<{ feedback: string; invalidArgs: boolean; policyDenied: boolean }> {
+  ): Promise<{ feedback: string; invalidArgs: boolean; policyDenied: boolean; auditEventId?: string }> {
     const outcome = await this.executor.execute(tool, args, {
       ...(this.ledger ? { ledger: this.ledger } : {}),
       ctx: this.toolContext,
-      session_id: this.sessionId,
+      session_id: sessionId,
       correlation_id: correlationId,
       model: this.model.model,
       killSwitch: this.killSwitch,
@@ -293,12 +379,17 @@ export class ReasoningEngine {
       ...(this.snapshots ? { snapshots: this.snapshots } : {}),
     });
 
+    const eventId =
+      "event_id" in outcome && outcome.event_id
+        ? { auditEventId: outcome.event_id }
+        : {};
     switch (outcome.status) {
       case "executed":
         return {
           feedback: `OK: ${outcome.summary}. Rollback: ${outcome.rollback_path}.`,
           invalidArgs: false,
           policyDenied: false,
+          ...eventId,
         };
       case "blocked":
         return {
@@ -309,18 +400,21 @@ export class ReasoningEngine {
           invalidArgs: outcome.reason.startsWith("invalid tool args"),
           // Policy/verifier/kill-switch blocks count toward the consecutive-denials trigger.
           policyDenied: !outcome.reason.startsWith("invalid tool args"),
+          ...eventId,
         };
       case "audit_failed":
         return {
           feedback: `ERROR: "${tool.descriptor.name}" did not run: ${outcome.reason}`,
           invalidArgs: false,
           policyDenied: false,
+          ...eventId,
         };
       case "apply_failed":
         return {
           feedback: `ERROR: "${tool.descriptor.name}" failed after audit: ${outcome.reason}`,
           invalidArgs: false,
           policyDenied: false,
+          ...eventId,
         };
     }
   }
