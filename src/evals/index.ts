@@ -21,6 +21,7 @@ import { contextFaithfulnessCases } from "./cases/context-faithfulness.js";
 import { mcpTrustCases } from "./cases/mcp-trust.js";
 import { hookTrustCases } from "./cases/hook-trust.js";
 import { skillTrustCases } from "./cases/skill-trust.js";
+import { subagentTrustCases } from "./cases/subagent-trust.js";
 
 export const allEvalCases: EvalCase[] = [
   ...promptInjectionCases,
@@ -34,6 +35,7 @@ export const allEvalCases: EvalCase[] = [
   ...mcpTrustCases,
   ...hookTrustCases,
   ...skillTrustCases,
+  ...subagentTrustCases,
 ];
 
 export { runSuite, checkGates } from "./harness.js";

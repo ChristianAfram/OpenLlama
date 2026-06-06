@@ -175,3 +175,31 @@
     everything regardless of skill text. Discovery/loading is path-confined to
     .opencli/skills/<slug>/ (strict slug regex blocks traversal). Every load is
     audited as a use_skill tool call.
+
+- service: subagent-runner
+  owner: chris
+  tier: local-only
+  risk_level: medium
+  repo: .
+  runtime: node (in-process child ReasoningEngine)
+  dashboard: "opencli audit show (filter tool_name=delegate)"
+  runbook: docs/subagents.md
+  slo: docs/slo/opencli.md
+  dependencies:
+    - audit-ledger
+    - tool-executor
+  data_classification:
+    - internal
+    - external
+  healthcheck: "n/a (invoked per delegate tool call)"
+  deployment: wired per agent run; child engines created on delegate
+  rollback: "n/a (ephemeral; no persisted state)"
+  alerts: []
+  notes: >-
+    Subagent extensibility layer (v0.8 B7) — "reach, never privilege". A child
+    runs the SAME kernel (executor/policy/audit/kill-switch) and, like the parent
+    loop, has NO ApprovalProvider, so it can never execute L4/L5 actions. The
+    child's answer returns through the normal tool-result path and is fenced as
+    untrusted data. Delegation is depth-capped (maxDepth, default 2; over-limit
+    audited as subagent:denied). A child shares the parent's correlation_id but
+    gets a fresh session_id; the kill switch is shared across the tree.
