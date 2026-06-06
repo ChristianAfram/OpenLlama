@@ -23,6 +23,7 @@ import { dependenciesRule } from "./rules/dependencies.js";
 import { networkRule } from "./rules/network.js";
 import { modelGovernanceRule } from "./rules/model-governance.js";
 import { auditAvailabilityRule } from "./rules/core.js";
+import { mcpRule } from "./rules/mcp.js";
 
 /** The default policy bundle, in evaluation order (order is cosmetic — the
  *  aggregation is order-independent: most restrictive always wins). */
@@ -35,10 +36,11 @@ export const DEFAULT_BUNDLE: readonly PolicyRule[] = [
   dependenciesRule,
   networkRule,
   modelGovernanceRule,
+  mcpRule,
 ];
 
 /** A stable identifier for the bundle version (bump on rule changes). */
-export const POLICY_BUNDLE_VERSION = "opencli-policy-v1";
+export const POLICY_BUNDLE_VERSION = "opencli-policy-v2";
 
 export class PolicyEngine {
   constructor(private readonly rules: readonly PolicyRule[] = DEFAULT_BUNDLE) {}

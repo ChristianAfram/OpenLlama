@@ -33,6 +33,8 @@ export interface ToolDescriptor {
   audit_required: boolean;
   rate_limit: string;
   rollback: string;
+  /** For MCP tools: whether the originating server is on the enterprise allowlist. */
+  mcp_allowlisted?: boolean;
 }
 
 // ─── Tool ─────────────────────────────────────────────────────────────────────
@@ -105,6 +107,12 @@ export interface PlannedMutation {
    * after the side effect runs.
    */
   apply: () => void | string | Promise<void | string>;
+  /**
+   * Extra fields merged into the audit event for this specific mutation.
+   * Used by MCP tools to attach source_kind / mcp_server / mcp_tool metadata
+   * without the executor needing to know about MCP.
+   */
+  extra_audit?: Partial<AppendInput>;
 }
 
 /**

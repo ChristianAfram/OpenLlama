@@ -64,6 +64,10 @@ export interface AuditEventBody {
   context_tokens_before?: number;
   context_tokens_after?: number;
   compaction_strategy?: "structural" | "model";
+  /** MCP source fields (v0.8 — B). Absent on native tool events. */
+  source_kind?: "native" | "mcp";
+  mcp_server?: string;
+  mcp_tool?: string;
 }
 
 /** A fully stored event including chain fields. */
@@ -133,7 +137,10 @@ CREATE TABLE IF NOT EXISTS events (
   redactions      TEXT,
   context_tokens_before INTEGER,
   context_tokens_after  INTEGER,
-  compaction_strategy   TEXT
+  compaction_strategy   TEXT,
+  source_kind           TEXT,
+  mcp_server            TEXT,
+  mcp_tool              TEXT
 );
 
 -- Enforce append-only at the DB level, not just in code.
@@ -159,6 +166,9 @@ const MIGRATIONS = [
   `ALTER TABLE events ADD COLUMN context_tokens_before INTEGER`,
   `ALTER TABLE events ADD COLUMN context_tokens_after INTEGER`,
   `ALTER TABLE events ADD COLUMN compaction_strategy TEXT`,
+  `ALTER TABLE events ADD COLUMN source_kind TEXT`,
+  `ALTER TABLE events ADD COLUMN mcp_server TEXT`,
+  `ALTER TABLE events ADD COLUMN mcp_tool TEXT`,
 ];
 
 // ─── AuditLedger ─────────────────────────────────────────────────────────────
@@ -189,14 +199,16 @@ export class AuditLedger {
         policy_decision, policy_reason, approval_id, input_source, target,
         data_read, data_changed, tool_name, model, prompt_version,
         result, error, rollback_path, cost_estimate, redactions,
-        context_tokens_before, context_tokens_after, compaction_strategy
+        context_tokens_before, context_tokens_after, compaction_strategy,
+        source_kind, mcp_server, mcp_tool
       ) VALUES (
         @event_id, @prev_hash, @hash, @timestamp, @actor, @session_id,
         @correlation_id, @service, @action, @risk_level, @permission_level,
         @policy_decision, @policy_reason, @approval_id, @input_source, @target,
         @data_read, @data_changed, @tool_name, @model, @prompt_version,
         @result, @error, @rollback_path, @cost_estimate, @redactions,
-        @context_tokens_before, @context_tokens_after, @compaction_strategy
+        @context_tokens_before, @context_tokens_after, @compaction_strategy,
+        @source_kind, @mcp_server, @mcp_tool
       )
     `);
 
@@ -265,6 +277,9 @@ export class AuditLedger {
       context_tokens_before: sanitized.context_tokens_before ?? null,
       context_tokens_after: sanitized.context_tokens_after ?? null,
       compaction_strategy: sanitized.compaction_strategy ?? null,
+      source_kind: sanitized.source_kind ?? null,
+      mcp_server: sanitized.mcp_server ?? null,
+      mcp_tool: sanitized.mcp_tool ?? null,
     };
 
     // 6. Insert — better-sqlite3 is synchronous; run() throws on failure.
@@ -285,7 +300,7 @@ export class AuditLedger {
   verify(): VerifyResult {
     const rows = this.db
       .prepare(
-        "SELECT seq, event_id, prev_hash, hash, timestamp, actor, session_id, correlation_id, service, action, risk_level, permission_level, policy_decision, policy_reason, approval_id, input_source, target, data_read, data_changed, tool_name, model, prompt_version, result, error, rollback_path, cost_estimate, redactions, context_tokens_before, context_tokens_after, compaction_strategy FROM events ORDER BY seq ASC",
+        "SELECT seq, event_id, prev_hash, hash, timestamp, actor, session_id, correlation_id, service, action, risk_level, permission_level, policy_decision, policy_reason, approval_id, input_source, target, data_read, data_changed, tool_name, model, prompt_version, result, error, rollback_path, cost_estimate, redactions, context_tokens_before, context_tokens_after, compaction_strategy, source_kind, mcp_server, mcp_tool FROM events ORDER BY seq ASC",
       )
       .all() as RawRow[];
 
@@ -445,6 +460,9 @@ interface RawRow {
   context_tokens_before: number | null;
   context_tokens_after: number | null;
   compaction_strategy: string | null;
+  source_kind: string | null;
+  mcp_server: string | null;
+  mcp_tool: string | null;
 }
 
 function rowToBody(row: RawRow): AuditEventBody {
@@ -477,6 +495,9 @@ function rowToBody(row: RawRow): AuditEventBody {
   if (row.context_tokens_before != null) body.context_tokens_before = row.context_tokens_before;
   if (row.context_tokens_after != null) body.context_tokens_after = row.context_tokens_after;
   if (row.compaction_strategy != null) body.compaction_strategy = row.compaction_strategy as "structural" | "model";
+  if (row.source_kind != null) body.source_kind = row.source_kind as "native" | "mcp";
+  if (row.mcp_server != null) body.mcp_server = row.mcp_server;
+  if (row.mcp_tool != null) body.mcp_tool = row.mcp_tool;
   return body;
 }
 
