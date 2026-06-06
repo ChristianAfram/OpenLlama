@@ -1,0 +1,48 @@
+{
+  "name": "opencli-vscode",
+  "displayName": "OpenCLI",
+  "description": "Drive the OpenCLI governance-native agent from VS Code. A thin client over the audited CLI — no kernel logic lives here.",
+  "version": "0.1.0",
+  "publisher": "opencli",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other", "Machine Learning"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "opencli.runAgent",
+        "title": "OpenCLI: Run Agent"
+      },
+      {
+        "command": "opencli.showAudit",
+        "title": "OpenCLI: Show Audit Timeline"
+      },
+      {
+        "command": "opencli.killSwitch",
+        "title": "OpenCLI: Activate Kill Switch"
+      }
+    ],
+    "configuration": {
+      "title": "OpenCLI",
+      "properties": {
+        "opencli.binaryPath": {
+          "type": "string",
+          "default": "opencli",
+          "description": "Path to the opencli executable used to drive the agent."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^6.0.3"
+  }
+}

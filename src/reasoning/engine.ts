@@ -33,6 +33,7 @@ import { fenceUntrusted } from "./context.js";
 import type { SessionStore } from "../sessions/store.js";
 import { DEFAULT_CONTEXT_BUDGET } from "../lib/config-scopes.js";
 import type { HookRunner } from "../hooks/runner.js";
+import type { AgentObserver, ToolCallStatus } from "../ide/events.js";
 
 export interface EngineOptions {
   registry: ToolRegistry;
@@ -106,6 +107,13 @@ export interface EngineOptions {
    * runs with no ApprovalProvider, so it cannot execute L4/L5 actions.
    */
   subagentDepth?: number;
+  /**
+   * Read-only run observer (v0.8 — C1, IDE bridge). When provided, the engine
+   * emits structured AgentEvents at lifecycle points (run start, each iteration,
+   * assistant turns, tool calls, run end). The observer cannot mutate anything —
+   * it is a pure sink, used to drive an IDE/editor via `opencli agent --json`.
+   */
+  observer?: AgentObserver;
 }
 
 export interface EngineRunResult {
@@ -138,6 +146,7 @@ export class ReasoningEngine {
   private readonly compaction: "structural" | "model";
   private readonly hooks: HookRunner | undefined;
   private readonly subagentDepth: number;
+  private readonly observer: AgentObserver | undefined;
 
   constructor(opts: EngineOptions) {
     this.registry = opts.registry;
@@ -160,6 +169,7 @@ export class ReasoningEngine {
     this.compaction = opts.compaction ?? "structural";
     this.hooks = opts.hooks;
     this.subagentDepth = opts.subagentDepth ?? 0;
+    this.observer = opts.observer;
     this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
@@ -220,6 +230,15 @@ export class ReasoningEngine {
       cwd: this.toolContext.repoRoot,
     });
 
+    this.observer?.({
+      type: "run_start",
+      v: 1,
+      session_id: sessionId,
+      correlation_id: correlationId,
+      model: this.model.model,
+      instruction,
+    });
+
     let iterations = 0;
     let toolCalls = 0;
     // Consecutive invalid-argument failures. Reset on any valid dispatch. When
@@ -254,11 +273,20 @@ export class ReasoningEngine {
         correlation_id: correlationId,
         cwd: this.toolContext.repoRoot,
       });
+      this.observer?.({
+        type: "run_end",
+        v: 1,
+        stop_reason: result.stopReason,
+        iterations: result.iterations,
+        tool_calls: result.toolCalls,
+        answer: result.answer,
+      });
       return result;
     };
 
     while (iterations < this.maxIterations) {
       iterations++;
+      this.observer?.({ type: "iteration", v: 1, n: iterations });
       await ctx.maybeCompact(sessionId, correlationId);
       const turn = await this.model.generate(ctx.toMessages(), this.toolDefs);
 
@@ -282,6 +310,7 @@ export class ReasoningEngine {
       if (turn.content) {
         ctx.addAssistant(turn.content);
         store?.appendTurn(sessionId, { role: "assistant", content: turn.content });
+        this.observer?.({ type: "assistant", v: 1, content: turn.content });
       }
 
       // No tool calls → the model is done.
@@ -310,6 +339,21 @@ export class ReasoningEngine {
           tool_name: call.name,
           content: feedback,
           audit_event_id: auditEventId ?? null,
+        });
+        const status: ToolCallStatus = invalidArgs
+          ? "invalid_args"
+          : policyDenied
+            ? "blocked"
+            : feedback.startsWith("ERROR:")
+              ? "error"
+              : "ok";
+        this.observer?.({
+          type: "tool_call",
+          v: 1,
+          name: call.name,
+          status,
+          audit_event_id: auditEventId ?? null,
+          feedback,
         });
 
         if (invalidArgs) {

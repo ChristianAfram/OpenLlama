@@ -15,6 +15,7 @@ import { HookRunner } from "../hooks/runner.js";
 import { SkillRegistry } from "../skills/registry.js";
 import { SubagentRunner } from "../reasoning/subagent.js";
 import { makeDelegateTool } from "../tools/delegate.js";
+import { serializeEvent, type AgentEvent } from "../ide/events.js";
 import { OllamaError } from "../lib/ollama.js";
 import { error, info, warn } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
@@ -35,6 +36,7 @@ interface AgentOptions {
   enterprise?: boolean;
   resume?: string;
   continue?: boolean;
+  json?: boolean;
 }
 
 export function registerAgentCommand(program: Command): void {
@@ -51,6 +53,7 @@ export function registerAgentCommand(program: Command): void {
     .option("--enterprise", "enterprise hard-block mode (model must be registered and evaluated)")
     .option("--resume <id>", "resume a previous session by id")
     .option("--continue", "resume the most recent session for this directory")
+    .option("--json", "emit a machine-readable NDJSON event stream (IDE bridge)")
     .action(async (questionParts: string[], options: AgentOptions) => {
       const question = questionParts.join(" ").trim();
       const repoRoot = resolve(options.cwd ?? process.cwd());
@@ -186,6 +189,14 @@ export function registerAgentCommand(program: Command): void {
         maxDepth: 2,
       });
 
+      // IDE bridge (v0.8 — C1): with --json, emit one NDJSON AgentEvent per line
+      // on stdout and suppress the human-readable output. The observer is a pure,
+      // read-only sink — it cannot alter the run or bypass any kernel gate.
+      const jsonMode = options.json === true;
+      const observer = jsonMode
+        ? (event: AgentEvent) => process.stdout.write(serializeEvent(event) + "\n")
+        : undefined;
+
       const registry = registryFactory();
       const engine = new ReasoningEngine({
         registry,
@@ -201,15 +212,20 @@ export function registerAgentCommand(program: Command): void {
         ...(sessionStore ? { sessionStore } : {}),
         ...(resumeSessionId ? { resumeSessionId } : {}),
         ...(hookRunner ? { hooks: hookRunner } : {}),
+        ...(observer ? { observer } : {}),
       });
 
       try {
-        info(`opencli agent: ${model} @ ${host} (read-only + draft tools)`);
+        if (!jsonMode) {
+          info(`opencli agent: ${model} @ ${host} (read-only + draft tools)`);
+        }
         const result = await engine.run(question);
-        process.stdout.write(result.answer + "\n");
-        info(
-          `\n[${String(result.iterations)} iteration(s), ${String(result.toolCalls)} tool call(s), stop: ${result.stopReason}]`,
-        );
+        if (!jsonMode) {
+          process.stdout.write(result.answer + "\n");
+          info(
+            `\n[${String(result.iterations)} iteration(s), ${String(result.toolCalls)} tool call(s), stop: ${result.stopReason}]`,
+          );
+        }
       } catch (err) {
         const message =
           err instanceof OllamaError
