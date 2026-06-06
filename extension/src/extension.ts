@@ -97,14 +97,62 @@ function formatEvent(event: AgentEvent): string {
   }
 }
 
+/** Minimal mirror of the timeline JSON contract (src/ide/timeline.ts). */
+interface TimelineEntry {
+  event_id: string;
+  action: string;
+  tool_name: string | null;
+  target: string | null;
+  result: string | null;
+  permission_level: number | null;
+  policy_decision: string | null;
+  source_kind: string | null;
+}
+interface TimelineRun {
+  correlation_id: string;
+  sessions: string[];
+  entries: TimelineEntry[];
+  counts: { total: number; executed: number; blocked: number; failed: number };
+}
+interface Timeline {
+  runs: TimelineRun[];
+  total_events: number;
+}
+
 function showAudit(channel: vscode.OutputChannel): void {
   const cwd = workspaceDir();
   channel.show(true);
-  channel.appendLine("\n$ opencli audit show");
-  const child = spawn(binaryPath(), ["audit", "show"], { cwd, shell: false });
-  child.stdout.on("data", (d: Buffer) => channel.append(d.toString()));
+  channel.appendLine("\n$ opencli audit timeline --json");
+
+  const child = spawn(binaryPath(), ["audit", "timeline", "--json"], { cwd, shell: false });
+  let buf = "";
+  child.stdout.on("data", (d: Buffer) => (buf += d.toString()));
   child.stderr.on("data", (d: Buffer) => channel.append(d.toString()));
   child.on("error", (err) => channel.appendLine(`error: ${err.message}`));
+  child.on("close", () => {
+    let timeline: Timeline;
+    try {
+      timeline = JSON.parse(buf.trim()) as Timeline;
+    } catch {
+      channel.appendLine(buf); // fall back to raw output
+      return;
+    }
+    channel.appendLine(`${String(timeline.runs.length)} run(s), ${String(timeline.total_events)} event(s)`);
+    for (const run of timeline.runs) {
+      const c = run.counts;
+      const sessions = run.sessions.length > 1 ? `, ${String(run.sessions.length)} sessions` : "";
+      channel.appendLine(
+        `▶ ${run.correlation_id.slice(0, 8)}  [${String(c.total)}: ${String(c.executed)} ok, ${String(c.blocked)} blocked, ${String(c.failed)} failed${sessions}]`,
+      );
+      for (const e of run.entries) {
+        const glyph = e.result === "executed" ? "✓" : e.result === "blocked" ? "✗" : e.result === "failed" ? "!" : "·";
+        const lvl = e.permission_level !== null ? ` L${String(e.permission_level)}` : "";
+        const decision = e.policy_decision ? ` ${e.policy_decision}` : "";
+        const tag = e.tool_name ?? e.action;
+        channel.appendLine(`   ${glyph} ${tag}${lvl}${decision}${e.target ? ` → ${e.target}` : ""}  (${e.event_id.slice(0, 8)})`);
+      }
+    }
+  });
 }
 
 async function killSwitch(channel: vscode.OutputChannel): Promise<void> {
