@@ -49,6 +49,36 @@ forensic record.
 - **Local channel.** The stream is local stdout — the same content the terminal
   would display.
 
+## `opencli audit timeline --json`
+
+The companion to the run stream: the past, grouped for display. It folds the flat
+audit ledger into **runs** keyed by `correlation_id` — a top-level agent run and
+any subagents it spawned share one correlation id, so they appear as a single run
+with multiple `sessions`. Each run carries ordered `entries` and per-result
+`counts`:
+
+```jsonc
+{
+  "runs": [
+    {
+      "correlation_id": "…",
+      "sessions": ["parent", "child"],
+      "started_at": "…", "ended_at": "…",
+      "counts": { "total": 5, "executed": 3, "blocked": 1, "failed": 1 },
+      "entries": [
+        { "event_id": "…", "seq": 12, "action": "run_shell", "tool_name": "run_shell",
+          "result": "blocked", "permission_level": 5, "policy_decision": "REQUIRE_CONFIRMATION",
+          "session_id": "parent", "source_kind": null, "target": "shell:…" }
+      ]
+    }
+  ],
+  "total_events": 5
+}
+```
+
+The model is **display-only**: `buildTimeline` reshapes the authoritative ledger
+and makes no decisions. Without `--json` the command prints a compact text tree.
+
 ## Consuming from an extension
 
 The reference VS Code extension scaffold lives in [`extension/`](../extension).

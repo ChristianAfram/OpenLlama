@@ -173,6 +173,7 @@ opencli kill-switch status          # show kill-switch state
 opencli kill-switch activate        # halt all mutating tools
 opencli kill-switch deactivate      # re-enable mutating tools
 opencli audit show                  # human-readable event timeline
+opencli audit timeline [--json]     # events grouped by run (IDE bridge / tree view)
 opencli audit verify                # check the hash chain is intact
 opencli audit export [--siem]       # JSONL export for Splunk/Elastic
 opencli audit export --otel         # OTel LogRecord JSONL for Grafana/OTLP

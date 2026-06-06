@@ -223,10 +223,13 @@
   rollback: "n/a (output formatting only; omit --json)"
   alerts: []
   notes: >-
-    IDE milestone slice (v0.8 C1). `opencli agent --json` emits a stable NDJSON
+    IDE milestone (v0.8 C1+C2). `opencli agent --json` emits a stable NDJSON
     AgentEvent stream on stdout (human progress goes to stderr). The stream is
     produced by a read-only AgentObserver — it cannot run a tool, mutate state,
     or bypass a kernel gate; --json changes output formatting only, every action
     is still gated and audited. The VS Code extension (extension/) is a thin
     client that spawns the opencli binary and renders this stream; it contains no
-    kernel logic. Bridge logic is tested in tests/ide-bridge.test.ts.
+    kernel logic. `opencli audit timeline --json` folds the ledger into runs
+    (grouped by correlation_id; parent+subagents share one run) for tree-view
+    rendering — display-only, makes no decisions. Bridge logic is tested in
+    tests/ide-bridge.test.ts and tests/ide-timeline.test.ts.

@@ -17,6 +17,7 @@ import {
 import { RollbackEngine } from "../kernel/rollback.js";
 import { getDefaultSnapshotStore } from "../kernel/snapshot.js";
 import { computeMetrics, formatMetrics, type AuditMetrics } from "../lib/metrics.js";
+import { buildTimeline, formatTimeline } from "../ide/timeline.js";
 import { error } from "../lib/ui.js";
 import { resolve } from "node:path";
 
@@ -46,6 +47,23 @@ export function registerAuditCommand(program: Command): void {
       );
       for (const ev of events) {
         process.stdout.write(formatEvent(ev));
+      }
+    });
+
+  // ── timeline ────────────────────────────────────────────────────────────────
+  audit
+    .command("timeline")
+    .description("Group events by run (correlation id) — text tree or --json (IDE)")
+    .option("-n, --limit <n>", "maximum events to consider", "500")
+    .option("--json", "emit the timeline as a JSON object (IDE bridge)")
+    .action((opts: { limit: string; json?: boolean }) => {
+      const ledger = getDefaultLedger();
+      const events = ledger.getEvents(Number(opts.limit), 0);
+      const timeline = buildTimeline(events);
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(timeline) + "\n");
+      } else {
+        process.stdout.write(formatTimeline(timeline));
       }
     });
 
