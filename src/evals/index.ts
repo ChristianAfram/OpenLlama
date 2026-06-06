@@ -20,6 +20,7 @@ import { rollbackCorrectnessCases } from "./cases/rollback-correctness.js";
 import { contextFaithfulnessCases } from "./cases/context-faithfulness.js";
 import { mcpTrustCases } from "./cases/mcp-trust.js";
 import { hookTrustCases } from "./cases/hook-trust.js";
+import { skillTrustCases } from "./cases/skill-trust.js";
 
 export const allEvalCases: EvalCase[] = [
   ...promptInjectionCases,
@@ -32,6 +33,7 @@ export const allEvalCases: EvalCase[] = [
   ...contextFaithfulnessCases,
   ...mcpTrustCases,
   ...hookTrustCases,
+  ...skillTrustCases,
 ];
 
 export { runSuite, checkGates } from "./harness.js";

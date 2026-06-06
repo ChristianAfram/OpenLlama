@@ -12,6 +12,7 @@ import { Command } from "commander";
 import { loadLayeredConfig, effectiveProfile, findProjectDir } from "../lib/config-scopes.js";
 import { loadHooksConfig } from "../hooks/config.js";
 import { HookRunner } from "../hooks/runner.js";
+import { SkillRegistry } from "../skills/registry.js";
 import { OllamaError } from "../lib/ollama.js";
 import { error, info, warn } from "../lib/ui.js";
 import { buildDefaultRegistry } from "../tools/index.js";
@@ -152,7 +153,14 @@ export function registerAgentCommand(program: Command): void {
         info(`hooks: ${String(hooksConfig.hooks.length)} hook(s) loaded from .opencli/hooks.json`);
       }
 
-      const registry = buildDefaultRegistry();
+      // Skills (v0.8 — B6): reusable guidance from .opencli/skills/<name>/SKILL.md.
+      // Skill bodies are UNTRUSTED — loaded via use_skill and fenced as data.
+      const skills = SkillRegistry.fromProjectDir(projectDir);
+      if (skills.list().length > 0) {
+        info(`skills: ${String(skills.list().length)} skill(s) available via use_skill`);
+      }
+
+      const registry = buildDefaultRegistry({ skills });
       const client = OllamaModelClient.fromHost(model, host);
       const engine = new ReasoningEngine({
         registry,
