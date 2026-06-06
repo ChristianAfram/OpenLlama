@@ -147,6 +147,8 @@ export function registerAgentCommand(program: Command): void {
         verifier: new RuleBasedVerifier(),
         model_eval_passed: governance.eval_passed,
         snapshots: getDefaultSnapshotStore(),
+        contextBudget: merged.effective.context.budget,
+        compaction: merged.effective.context.compaction,
         ...(sessionStore ? { sessionStore } : {}),
         ...(resumeSessionId ? { resumeSessionId } : {}),
       });

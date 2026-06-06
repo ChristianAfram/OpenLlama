@@ -27,9 +27,10 @@ import {
   type ToolContext,
   type ToolRegistry,
 } from "../tools/registry.js";
-import { ConversationContext } from "./context.js";
 import type { ModelClient, ToolDefinition } from "./model-client.js";
+import { ContextManager } from "./context-manager.js";
 import type { SessionStore } from "../sessions/store.js";
+import { DEFAULT_CONTEXT_BUDGET } from "../lib/config-scopes.js";
 
 export interface EngineOptions {
   registry: ToolRegistry;
@@ -78,6 +79,17 @@ export interface EngineOptions {
   sessionId?: string;
   /** Override the generated correlation id (shared across a subagent tree). */
   correlationId?: string;
+  /**
+   * Context token budget before compaction kicks in (v0.8 — A2).
+   * Defaults to DEFAULT_CONTEXT_BUDGET (24 000 tokens ≈ 96 000 chars).
+   */
+  contextBudget?: number;
+  /**
+   * Compaction strategy when the budget is exceeded (v0.8 — A2).
+   * "structural" (default): evict oldest fenced tool results.
+   * "model": summarise the evicted span via a model call.
+   */
+  compaction?: "structural" | "model";
 }
 
 export interface EngineRunResult {
@@ -106,6 +118,8 @@ export class ReasoningEngine {
   private readonly sessionStore: SessionStore | undefined;
   private readonly resumeSessionId: string | undefined;
   private readonly overrideCorrelationId: string | undefined;
+  private readonly contextBudget: number;
+  private readonly compaction: "structural" | "model";
 
   constructor(opts: EngineOptions) {
     this.registry = opts.registry;
@@ -124,6 +138,8 @@ export class ReasoningEngine {
     this.resumeSessionId = opts.resumeSessionId;
     this.defaultSessionId = opts.sessionId ?? randomUUID();
     this.overrideCorrelationId = opts.correlationId;
+    this.contextBudget = opts.contextBudget ?? DEFAULT_CONTEXT_BUDGET;
+    this.compaction = opts.compaction ?? "structural";
     this.executor = new Executor(opts.ledger);
     this.toolDefs = this.registry
       .list()
@@ -152,12 +168,18 @@ export class ReasoningEngine {
     const correlationId =
       resumeMeta?.correlation_id ?? this.overrideCorrelationId ?? randomUUID();
 
-    // Build the context: rehydrate a resumed transcript, else start fresh.
-    let ctx: ConversationContext;
+    // Build the context manager: rehydrate a resumed transcript, else start fresh.
+    const cmOpts = {
+      tokenBudget: this.contextBudget,
+      compaction: this.compaction,
+      ledger: this.ledger,
+      modelClient: this.model,
+    };
+    let ctx: ContextManager;
     if (resumeMeta && store) {
-      ctx = ConversationContext.hydrate(store.getTurns(resumeMeta.session_id));
+      ctx = ContextManager.hydrate(store.getTurns(resumeMeta.session_id), cmOpts);
     } else {
-      ctx = new ConversationContext();
+      ctx = new ContextManager(cmOpts);
       // Register a new session row before recording any turns.
       store?.create({
         session_id: sessionId,
@@ -202,6 +224,7 @@ export class ReasoningEngine {
 
     while (iterations < this.maxIterations) {
       iterations++;
+      await ctx.maybeCompact(sessionId, correlationId);
       const turn = await this.model.generate(ctx.toMessages(), this.toolDefs);
 
       // Track token usage for cost controls.
