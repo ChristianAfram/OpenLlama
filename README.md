@@ -36,7 +36,7 @@ The coding-agent market has split into two camps that do not overlap: **capabili
 | **OpenHands** (~75k★) | Open | Yes | Task logs | No compliance posture |
 | **Cline** (~62k★) | Open | Yes | Limited | No governance kernel |
 | **VibeFlow / PolicyLayer** | Closed SaaS | n/a (wraps cloud) | Tamper-evident — as a paid external layer | Closed; cloud-dependent; third party holds your evidence |
-| **OpenCLI** | MIT | Yes (Ollama) | Hash-chained, append-only, on-prem, exportable | Local-model quality ceiling (see [§22](docs/OpenLlama-Master-Plan.md)) |
+| **OpenCLI** | MIT | Yes (Ollama) | Hash-chained, append-only, on-prem, exportable | Local-model quality ceiling (see [§22](docs/OpenCLI-Master-Plan.md)) |
 
 **Compliance context:** the artifacts OpenCLI produces (hash-chained ledger, SIEM export, exception records) are relevant to SOC 2 TSC, HIPAA §164.312(b), CMMC AU.2.042, NYDFS Part 500, and the EU AI Act's lifetime-logging requirement. OpenCLI does not *certify* compliance — that requires your org policy and a third-party auditor. It provides the evidence layer that *supports* an audit.
 
@@ -88,7 +88,8 @@ are in place. Built and tested across milestones v0.1–v0.7:
   mutation or secret leak **even if the model is fully compromised and obeys
   it**. Deterministic evals verify the structural controls currently claimed for
   the v0.7 beta. Categories: prompt-injection, destructive-refusal,
-  secret-handling, tool-permissions, approval-boundary, json-tool-args.
+  secret-handling, tool-permissions, approval-boundary, json-tool-args,
+  rollback-correctness, context-faithfulness.
   Prompt-injection and destructive-refusal are hard **100%** release gates,
   enforced in CI. See [`evals/README.md`](evals/README.md).
 - **Independent verifier** — a second, rule-based reviewer that runs after
@@ -110,6 +111,27 @@ are in place. Built and tested across milestones v0.1–v0.7:
   the prior content from a content-addressed snapshot store captured before the
   audit write. Irrecoverable tools (shell, git push) print manual instructions.
   All reversals are themselves audited. Verified via `rollback-correctness` evals.
+- **Config scopes** — layered configuration merged `builtin < user < project <
+  env < flag`. The `[security]` group is **tighten-only**: a checked-in
+  `.opencli/config.yaml` (editable by anyone who can open a PR) may *raise* the
+  security posture (enable `enterprise`, add `denied_paths`) but can never weaken
+  one a lower scope set; loosening attempts are dropped and recorded. Landed in
+  v0.7 as the first platform-layer feature. See [`docs/config-scopes.md`](docs/config-scopes.md).
+- **Sessions & resume** — each `opencli agent` run is persisted as a resumable
+  session (turns, tokens, status) in a local SQLite store; `opencli session
+  list|show|rm` and `agent --resume <id>` / `--continue`. Transcript content is
+  secret-redacted before storage, and resumed tool output is re-fenced as
+  untrusted data so a stored injection gains no authority on resume. The store is
+  operator state — the append-only audit ledger remains the compliance record.
+  Deleting a session is a **Level 5** action (manual `--yes` confirmation, audited
+  first).
+- **Context manager + compaction** — a token-budgeted context window with hybrid
+  compaction: deterministic **structural** eviction of the oldest fenced
+  tool-results by default, or optional local-model **summary** when configured.
+  Every compaction is audited (`context_compaction`, with tokens before/after)
+  *before* the in-memory context is mutated; evicted content is replaced by a
+  fenced placeholder recording its SHA-256. Never evicts system/developer/user or
+  assistant turns. Verified by the `context-faithfulness` eval category.
 - **SIEM/OTel export** — `audit export --siem` emits raw JSONL for Splunk/Elastic;
   `audit export --otel` emits OTel-compatible `LogRecord` JSONL for Grafana Tempo
   or any OTLP-compatible backend.
@@ -137,6 +159,11 @@ are in place. Built and tested across milestones v0.1–v0.7:
 ```bash
 opencli chat  "<prompt>"            # read-only conversation with a local model
 opencli agent "<task>"              # the audited agent loop (read + draft + L3 write)
+opencli agent "<task>" --continue   # resume the most recent session for this dir
+opencli agent "<task>" --resume <id>  # resume a specific session
+opencli session list                # list resumable sessions
+opencli session show <id>           # session metadata + redacted transcript
+opencli session rm <id> --yes       # delete a session (Level 5, audited)
 opencli exec  <tool> --json '<args>'  # run one tool through the kernel (no model)
 opencli eval                        # run the AI eval suite + enforce the gates
 opencli policy test --json '<action>' # evaluate an action against the policy bundle
@@ -158,7 +185,7 @@ See [`docs/demo.md`](docs/demo.md) for the 90-second thesis demo (write a file �
 show the ledger → tamper with it → watch the chain break).
 
 The remaining milestones are tracked in
-[`docs/OpenLlama-Master-Plan.md`](docs/OpenLlama-Master-Plan.md).
+[`docs/OpenCLI-Master-Plan.md`](docs/OpenCLI-Master-Plan.md).
 [`CLAUDE.md`](CLAUDE.md) is the production-readiness framework that governs every
 change.
 

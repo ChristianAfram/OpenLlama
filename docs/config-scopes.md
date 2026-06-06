@@ -1,4 +1,7 @@
-# Config Scopes (v0.8)
+# Config Scopes
+
+Config scopes landed in **v0.7** as the first platform-layer feature and are
+available now.
 
 OpenCLI resolves configuration from up to five **scopes**, merged in increasing
 order of precedence:
@@ -57,7 +60,10 @@ gate world mutations, so a ledger failure warns rather than aborts the run.
 
 Enforcement happens at **merge time** (the primary control) so that a loosening
 attempt can never reach the policy engine, executor, or any tool in the first
-place. A defense-in-depth `config_integrity` *policy rule* (which would DENY a
-mutation whose governing value originated from a project scope attempting to
-loosen) is planned for the extensibility milestone, where project-scoped values
-begin to drive MCP/network policy directly.
+place. This is the shipping behaviour in v0.7.
+
+A defense-in-depth `config_integrity` *policy rule* (which would DENY a mutation
+whose governing value originated from a project scope attempting to loosen) is a
+future addition: **v0.8 expands config scopes** with that policy rule and managed
+org-policy signing, once project-scoped values begin to drive MCP/network policy
+directly. The merge-time control above already enforces tighten-only today.

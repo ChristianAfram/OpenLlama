@@ -62,6 +62,45 @@ afterEach(() => {
 });
 
 describe("session persistence", () => {
+  it("runs without a session store (graceful degradation, no persistence)", async () => {
+    const model = new ScriptedModel([finalAnswer("hi")]);
+    const engine = new ReasoningEngine({
+      registry: buildDefaultRegistry(),
+      model,
+      toolContext: { repoRoot: repo },
+      ledger,
+      // no sessionStore — persistence is convenience, not a gate
+    });
+    const result = await engine.run("say hi");
+    expect(result.answer).toBe("hi");
+    expect(result.stopReason).toBe("final_answer");
+    // Nothing persisted (the store from beforeEach was never passed in).
+    expect(store.list()).toHaveLength(0);
+  });
+
+  it("mints a unique session_id per fresh run", async () => {
+    const e1 = new ReasoningEngine({
+      registry: buildDefaultRegistry(),
+      model: new ScriptedModel([finalAnswer("a")]),
+      toolContext: { repoRoot: repo },
+      ledger,
+      sessionStore: store,
+    });
+    await e1.run("first");
+    const e2 = new ReasoningEngine({
+      registry: buildDefaultRegistry(),
+      model: new ScriptedModel([finalAnswer("b")]),
+      toolContext: { repoRoot: repo },
+      ledger,
+      sessionStore: store,
+    });
+    await e2.run("second");
+
+    const ids = store.list().map((s) => s.session_id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2); // distinct
+  });
+
   it("persists a run and finishes it as completed", async () => {
     const model = new ScriptedModel([finalAnswer("hi")]);
     const engine = new ReasoningEngine({
