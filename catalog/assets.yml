@@ -111,6 +111,28 @@
   risks:
     - eval regressions are detected immediately via CI gate
 
+- asset: session-store
+  type: database
+  owner: chris
+  environment: local
+  data_classification: internal
+  description: >-
+    SQLite database storing resumable agent transcripts (turns) and session
+    metadata. Operator convenience state — deletable with `session rm`. Distinct
+    from the audit ledger: mutable, not hash-chained, not a compliance record.
+    All transcript content is secret-redacted before storage.
+  path: "~/.local/share/openllama/sessions.sqlite (default; overridable via OPENCLI_SESSION_DB)"
+  backup: "manual; losing this file prevents session resume but does not affect audit integrity"
+  restore_tested: false
+  access:
+    - opencli-agent (src/sessions/store.ts — create/appendTurn/finish/remove)
+    - opencli session (src/commands/session.ts — list/show/rm via MutatingTool)
+  risks:
+    - stored transcript content could contain sensitive codebase data; mitigated by secret redaction
+    - file is deletable without kernel approval (direct filesystem access); session rm is the governed path
+    - no automatic backup; losing sessions.sqlite loses resume history only
+  notes: "correlation_id is the join key back to the audit ledger for forensics"
+
 - asset: sbom
   type: artifact
   owner: chris

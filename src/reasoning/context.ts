@@ -74,6 +74,35 @@ export class ConversationContext {
     return [...this.messages];
   }
 
+  /**
+   * Rebuild a context from persisted turns (session resume, v0.8).
+   *
+   * The system + developer tiers are NOT replayed — the constructor reseeds them
+   * from the CURRENT prompts, so a resumed session always runs under the latest
+   * safety instructions. Stored tool results are re-fenced via addToolResult, so
+   * resumed external data keeps its untrusted-data status and never gains
+   * instruction authority.
+   */
+  static hydrate(
+    turns: { role: "user" | "assistant" | "tool_result"; content: string; tool_name?: string | null; source?: string | null }[],
+  ): ConversationContext {
+    const ctx = new ConversationContext();
+    for (const t of turns) {
+      switch (t.role) {
+        case "user":
+          ctx.addUser(t.content);
+          break;
+        case "assistant":
+          ctx.addAssistant(t.content);
+          break;
+        case "tool_result":
+          ctx.addToolResult(t.tool_name ?? t.source ?? "unknown", t.content);
+          break;
+      }
+    }
+    return ctx;
+  }
+
   get promptVersion(): string {
     return PROMPT_VERSION;
   }

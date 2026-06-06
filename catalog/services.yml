@@ -98,3 +98,26 @@
   rollback: "opencli kill-switch deactivate"
   alerts:
     - kill_switch_active
+
+- service: session-store
+  owner: chris
+  tier: local-only
+  risk_level: medium
+  repo: .
+  runtime: sqlite (better-sqlite3)
+  dashboard: "opencli session list"
+  runbook: docs/runbook.md
+  slo: docs/slo/opencli.md
+  dependencies:
+    - audit-ledger
+  data_classification:
+    - internal
+  healthcheck: "opencli session list"
+  deployment: created on first agent run
+  rollback: "opencli session rm <id> --yes (per-session); delete sessions.sqlite to wipe all"
+  alerts: []
+  notes: >-
+    Operator convenience state — NOT a compliance record. Secrets in transcript
+    content are redacted via redactValue() before storage. The audit ledger
+    (not this store) is the authoritative forensic record. session rm is
+    a MutatingTool routed through the kernel (audited).

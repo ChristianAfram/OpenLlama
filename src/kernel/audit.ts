@@ -60,6 +60,10 @@ export interface AuditEventBody {
   rollback_path?: string;
   cost_estimate?: string;
   redactions?: RedactionRecord[];
+  /** Context compaction fields (v0.8 — A2). Optional; absent on non-compaction events. */
+  context_tokens_before?: number;
+  context_tokens_after?: number;
+  compaction_strategy?: "structural" | "model";
 }
 
 /** A fully stored event including chain fields. */
@@ -126,7 +130,10 @@ CREATE TABLE IF NOT EXISTS events (
   error           TEXT,
   rollback_path   TEXT,
   cost_estimate   TEXT,
-  redactions      TEXT
+  redactions      TEXT,
+  context_tokens_before INTEGER,
+  context_tokens_after  INTEGER,
+  compaction_strategy   TEXT
 );
 
 -- Enforce append-only at the DB level, not just in code.
@@ -142,6 +149,17 @@ CREATE TRIGGER IF NOT EXISTS no_delete_events
     SELECT RAISE(ABORT, 'audit ledger is append-only: DELETE not permitted');
   END;
 `;
+
+/**
+ * Additive migrations run after the SCHEMA CREATE TABLE IF NOT EXISTS.
+ * Each ALTER TABLE succeeds on first run; the try-catch swallows the
+ * "duplicate column name" error on subsequent runs against an existing DB.
+ */
+const MIGRATIONS = [
+  `ALTER TABLE events ADD COLUMN context_tokens_before INTEGER`,
+  `ALTER TABLE events ADD COLUMN context_tokens_after INTEGER`,
+  `ALTER TABLE events ADD COLUMN compaction_strategy TEXT`,
+];
 
 // ─── AuditLedger ─────────────────────────────────────────────────────────────
 
@@ -160,6 +178,9 @@ export class AuditLedger {
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("synchronous = FULL");
     this.db.exec(SCHEMA);
+    for (const m of MIGRATIONS) {
+      try { this.db.exec(m); } catch { /* column already exists */ }
+    }
 
     this.insertStmt = this.db.prepare(`
       INSERT INTO events (
@@ -167,13 +188,15 @@ export class AuditLedger {
         correlation_id, service, action, risk_level, permission_level,
         policy_decision, policy_reason, approval_id, input_source, target,
         data_read, data_changed, tool_name, model, prompt_version,
-        result, error, rollback_path, cost_estimate, redactions
+        result, error, rollback_path, cost_estimate, redactions,
+        context_tokens_before, context_tokens_after, compaction_strategy
       ) VALUES (
         @event_id, @prev_hash, @hash, @timestamp, @actor, @session_id,
         @correlation_id, @service, @action, @risk_level, @permission_level,
         @policy_decision, @policy_reason, @approval_id, @input_source, @target,
         @data_read, @data_changed, @tool_name, @model, @prompt_version,
-        @result, @error, @rollback_path, @cost_estimate, @redactions
+        @result, @error, @rollback_path, @cost_estimate, @redactions,
+        @context_tokens_before, @context_tokens_after, @compaction_strategy
       )
     `);
 
@@ -239,6 +262,9 @@ export class AuditLedger {
       rollback_path: sanitized.rollback_path ?? null,
       cost_estimate: sanitized.cost_estimate ?? null,
       redactions: redactions.length > 0 ? JSON.stringify(redactions) : null,
+      context_tokens_before: sanitized.context_tokens_before ?? null,
+      context_tokens_after: sanitized.context_tokens_after ?? null,
+      compaction_strategy: sanitized.compaction_strategy ?? null,
     };
 
     // 6. Insert — better-sqlite3 is synchronous; run() throws on failure.
@@ -259,7 +285,7 @@ export class AuditLedger {
   verify(): VerifyResult {
     const rows = this.db
       .prepare(
-        "SELECT seq, event_id, prev_hash, hash, timestamp, actor, session_id, correlation_id, service, action, risk_level, permission_level, policy_decision, policy_reason, approval_id, input_source, target, data_read, data_changed, tool_name, model, prompt_version, result, error, rollback_path, cost_estimate, redactions FROM events ORDER BY seq ASC",
+        "SELECT seq, event_id, prev_hash, hash, timestamp, actor, session_id, correlation_id, service, action, risk_level, permission_level, policy_decision, policy_reason, approval_id, input_source, target, data_read, data_changed, tool_name, model, prompt_version, result, error, rollback_path, cost_estimate, redactions, context_tokens_before, context_tokens_after, compaction_strategy FROM events ORDER BY seq ASC",
       )
       .all() as RawRow[];
 
@@ -416,6 +442,9 @@ interface RawRow {
   rollback_path: string | null;
   cost_estimate: string | null;
   redactions: string | null;
+  context_tokens_before: number | null;
+  context_tokens_after: number | null;
+  compaction_strategy: string | null;
 }
 
 function rowToBody(row: RawRow): AuditEventBody {
@@ -445,6 +474,9 @@ function rowToBody(row: RawRow): AuditEventBody {
   if (row.rollback_path != null) body.rollback_path = row.rollback_path;
   if (row.cost_estimate != null) body.cost_estimate = row.cost_estimate;
   if (row.redactions != null) body.redactions = JSON.parse(row.redactions) as RedactionRecord[];
+  if (row.context_tokens_before != null) body.context_tokens_before = row.context_tokens_before;
+  if (row.context_tokens_after != null) body.context_tokens_after = row.context_tokens_after;
+  if (row.compaction_strategy != null) body.compaction_strategy = row.compaction_strategy as "structural" | "model";
   return body;
 }
 

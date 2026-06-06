@@ -17,6 +17,7 @@ import { registerEvalCommand } from "./commands/eval.js";
 import { registerExecCommand } from "./commands/exec.js";
 import { registerKillSwitchCommand } from "./commands/kill-switch.js";
 import { registerPolicyCommand } from "./commands/policy.js";
+import { registerSessionCommand } from "./commands/session.js";
 
 const program = new Command();
 
@@ -35,6 +36,7 @@ registerEvalCommand(program);
 registerExecCommand(program);
 registerKillSwitchCommand(program);
 registerPolicyCommand(program);
+registerSessionCommand(program);
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);

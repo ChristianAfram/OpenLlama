@@ -152,6 +152,44 @@
   deletion_path: process exit
   approval_required_for_permanent_write: false
 
+- flow: transcript-to-session-store
+  source: reasoning engine (src/reasoning/engine.ts)
+  destination: session store (src/sessions/store.ts → SQLite)
+  data_classification: internal
+  contains_personal_data: maybe (user's codebase content in turns)
+  description: >-
+    Each agent turn (user instruction, assistant reasoning, tool results) is
+    persisted to the session store after secret redaction. The store is operator
+    convenience state: enables `opencli agent --resume` and `session list`. It is
+    NOT the compliance record — the audit ledger holds that. The join key is
+    correlation_id. Tool results are re-fenced as untrusted data on resume so a
+    stored injection attempt gains no authority in the resumed session.
+  retention: indefinite until `opencli session rm` or manual SQLite deletion
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: "opencli session rm <id> --yes (governed, audited); or delete sessions.sqlite directly"
+  approval_required_for_permanent_write: false
+  notes: "redactValue() applied to every turn content before write; tool outputs re-fenced on hydrate"
+
+- flow: compaction-evicts-context
+  source: context manager (src/reasoning/context-manager.ts) [planned — A2]
+  destination: session store / audit ledger
+  data_classification: internal
+  contains_personal_data: maybe
+  description: >-
+    When the context window exceeds the configured budget, the context manager
+    evicts the oldest fenced tool-result turns (structural compaction) or
+    summarizes a span via a model call (model compaction). A context_compaction
+    audit event is written before the in-memory context is mutated. Evicted
+    content is referenced by sha256 in the audit event so forensics can locate
+    the full content in the session store.
+  retention: evicted content remains in session store; only removed from in-memory context
+  external_processors: []
+  logs_raw_content: false
+  deletion_path: "context manager eviction is in-memory only; session store retains the original turns"
+  approval_required_for_permanent_write: false
+  notes: "A2 milestone; this flow entry is a forward declaration"
+
 - flow: model-inference-local
   source: reasoning engine (src/reasoning/engine.ts)
   destination: local Ollama model server (localhost:11434)
