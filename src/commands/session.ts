@@ -18,6 +18,7 @@
 import { Command } from "commander";
 import { getDefaultSessionStore, type SessionStore } from "../sessions/store.js";
 import { getDefaultLedger, AuditWriteError, type AuditLedger } from "../kernel/audit.js";
+import { buildSessionList } from "../ide/sessions.js";
 import { error, info, warn } from "../lib/ui.js";
 
 /** Dependencies for governed session deletion (injectable for testing). */
@@ -92,9 +93,17 @@ export function registerSessionCommand(program: Command): void {
   session
     .command("list")
     .description("List sessions, most recently updated first")
-    .action(() => {
+    .option("--json", "emit the session list as a JSON object (IDE resume picker)")
+    .action((opts: { json?: boolean }) => {
       const store = getDefaultSessionStore();
       const sessions = store.list();
+      if (opts.json) {
+        const list = buildSessionList(
+          sessions.map((meta) => ({ meta, turns: store.turnCount(meta.session_id) })),
+        );
+        process.stdout.write(JSON.stringify(list) + "\n");
+        return;
+      }
       if (sessions.length === 0) {
         process.stdout.write("No sessions recorded.\n");
         return;

@@ -79,12 +79,35 @@ with multiple `sessions`. Each run carries ordered `entries` and per-result
 The model is **display-only**: `buildTimeline` reshapes the authoritative ledger
 and makes no decisions. Without `--json` the command prints a compact text tree.
 
+## `opencli session list --json`
+
+The resume picker's data source. Emits the resumable sessions as display
+summaries so an editor can show a quick-pick and relaunch
+`opencli agent --resume <id> --json`:
+
+```jsonc
+{
+  "sessions": [
+    { "session_id": "…", "correlation_id": "…", "status": "completed",
+      "created_at": "…", "updated_at": "…", "model": "…", "cwd": "…",
+      "turns": 6, "total_tokens": 1820, "stop_reason": "final_answer",
+      "is_subagent": false }
+  ],
+  "count": 1
+}
+```
+
+`is_subagent` marks ephemeral subagent children; the editor offers only
+top-level sessions (`is_subagent: false`) for resume. Like the timeline, this is
+display-only reshaping of session-store metadata.
+
 ## Consuming from an extension
 
 The reference VS Code extension scaffold lives in [`extension/`](../extension).
 It spawns `opencli agent --json`, parses each line with the same contract above,
-and renders a run timeline. The extension contains **no kernel logic** — it is a
-pure client of this stream and of `opencli audit`.
+renders a run timeline, and offers a **resume picker** backed by
+`opencli session list --json`. The extension contains **no kernel logic** — it is
+a pure client of these streams and of `opencli audit`.
 
 ## Tests
 

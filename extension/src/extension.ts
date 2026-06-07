@@ -57,10 +57,17 @@ async function runAgent(channel: vscode.OutputChannel): Promise<void> {
   });
   if (!instruction) return;
 
-  channel.show(true);
-  channel.appendLine(`\n$ opencli agent --json ${JSON.stringify(instruction)}`);
+  // Offer to resume a previous session for this folder (C3 resume picker).
+  const resumeId = await pickResumeSession(cwd);
 
-  const child = spawn(binaryPath(), ["agent", "--json", instruction], { cwd, shell: false });
+  const args = ["agent", "--json"];
+  if (resumeId) args.push("--resume", resumeId);
+  args.push(instruction);
+
+  channel.show(true);
+  channel.appendLine(`\n$ opencli ${args.map((a) => (a === instruction ? JSON.stringify(a) : a)).join(" ")}`);
+
+  const child = spawn(binaryPath(), args, { cwd, shell: false });
   const rl = createInterface({ input: child.stdout });
 
   rl.on("line", (line) => {
@@ -76,6 +83,59 @@ async function runAgent(channel: vscode.OutputChannel): Promise<void> {
   child.stderr.on("data", (d: Buffer) => channel.append(d.toString()));
   child.on("error", (err) => channel.appendLine(`error: ${err.message}`));
   child.on("close", (code) => channel.appendLine(`[opencli exited with code ${String(code)}]`));
+}
+
+interface SessionSummary {
+  session_id: string;
+  status: string;
+  updated_at: string;
+  model: string;
+  turns: number;
+  total_tokens: number;
+  is_subagent: boolean;
+}
+interface SessionList {
+  sessions: SessionSummary[];
+  count: number;
+}
+
+/** Show a quick-pick of resumable sessions; returns a session id or undefined. */
+async function pickResumeSession(cwd: string): Promise<string | undefined> {
+  let list: SessionList;
+  try {
+    const out = await runCapture(binaryPath(), ["session", "list", "--json"], cwd);
+    list = JSON.parse(out.trim()) as SessionList;
+  } catch {
+    return undefined; // no sessions / store unavailable → just start fresh
+  }
+  // Only top-level sessions are resumable; subagents are ephemeral children.
+  const resumable = list.sessions.filter((s) => !s.is_subagent);
+  if (resumable.length === 0) return undefined;
+
+  const items: (vscode.QuickPickItem & { id?: string })[] = [
+    { label: "$(add) Start a new session" },
+    ...resumable.map((s) => ({
+      label: `$(history) ${s.session_id.slice(0, 8)} — ${s.status}`,
+      description: `${s.model} · ${String(s.turns)} turns · ${String(s.total_tokens)} tokens`,
+      detail: `updated ${s.updated_at}`,
+      id: s.session_id,
+    })),
+  ];
+  const choice = await vscode.window.showQuickPick(items, {
+    placeHolder: "Resume a previous session, or start a new one",
+  });
+  return choice?.id;
+}
+
+/** Run a command to completion and resolve its stdout (rejects on non-zero exit). */
+function runCapture(cmd: string, args: string[], cwd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { cwd, shell: false });
+    let out = "";
+    child.stdout.on("data", (d: Buffer) => (out += d.toString()));
+    child.on("error", reject);
+    child.on("close", (code) => (code === 0 ? resolve(out) : reject(new Error(`exit ${String(code)}`))));
+  });
 }
 
 function formatEvent(event: AgentEvent): string {

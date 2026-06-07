@@ -163,6 +163,7 @@ opencli agent "<task>" --continue   # resume the most recent session for this di
 opencli agent "<task>" --resume <id>  # resume a specific session
 opencli agent "<task>" --json       # NDJSON event stream for editors (IDE bridge)
 opencli session list                # list resumable sessions
+opencli session list --json         # session list as JSON (IDE resume picker)
 opencli session show <id>           # session metadata + redacted transcript
 opencli session rm <id> --yes       # delete a session (Level 5, audited)
 opencli exec  <tool> --json '<args>'  # run one tool through the kernel (no model)
