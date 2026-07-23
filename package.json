@@ -25,7 +25,7 @@
     "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json"
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^13.0.1",
     "commander": "^15.0.0",
     "ink": "^7.0.5",
     "react": "^19.2.7",
